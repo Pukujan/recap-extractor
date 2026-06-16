@@ -104,6 +104,69 @@ describe("CourtListenerClient", () => {
     expect(url).not.toContain("type=o");
   });
 
+  it("retries on 429 rate limit after waiting", async () => {
+    const wait = vi.fn().mockResolvedValue(undefined);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        text: async () => '{"detail":"Rate limit exceeded"}',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
+
+    const client = new CourtListenerClient({
+      baseUrl: "https://www.courtlistener.com/api/rest/v4",
+      token: "abc123",
+      fetchImpl: fetchMock,
+      retryDelayMs: 100,
+      wait,
+    });
+
+    const result = await client.searchRecap({
+      searchTerms: "motion",
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(wait).toHaveBeenCalledWith(100);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ results: [] });
+  });
+
+  it("gives up after max retries on 429", async () => {
+    const wait = vi.fn().mockResolvedValue(undefined);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () => '{"detail":"Rate limit exceeded"}',
+    });
+
+    const client = new CourtListenerClient({
+      baseUrl: "https://www.courtlistener.com/api/rest/v4",
+      token: "abc123",
+      fetchImpl: fetchMock,
+      maxRetries: 2,
+      retryDelayMs: 50,
+      wait,
+    });
+
+    await expect(
+      client.searchRecap({
+        searchTerms: "motion",
+        page: 1,
+        pageSize: 20,
+      })
+    ).rejects.toThrow(/429/i);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("does not expose PACER purchase or RECAP Fetch methods in MVP client", () => {
     const client = new CourtListenerClient({
       baseUrl: "https://www.courtlistener.com/api/rest/v4",
