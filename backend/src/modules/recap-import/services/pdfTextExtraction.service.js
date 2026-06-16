@@ -1,9 +1,17 @@
-import pdfParse from 'pdf-parse';
+let pdfParseFn;
+
+async function getPdfParse() {
+  if (pdfParseFn) return pdfParseFn;
+  const mod = await import('pdf-parse');
+  pdfParseFn = mod.PDFParse || mod.default || mod;
+  return pdfParseFn;
+}
 
 export async function defaultPdfLoader(pdfPath) {
   const fs = await import('fs/promises');
   const dataBuffer = await fs.readFile(pdfPath);
-  const data = await pdfParse(dataBuffer);
+  const parse = await getPdfParse();
+  const data = await parse(dataBuffer);
   return {
     pages: data.text ? [{ text: data.text }] : [],
     pageCount: data.numpages || 1,
