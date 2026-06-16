@@ -6,7 +6,7 @@ export class CourtListenerClient {
   }
 
   async searchRecap({ searchTerms, court, page, pageSize } = {}) {
-    let query = `type=r&q=${encodeURIComponent(searchTerms)}`;
+    let query = `type=rd&q=${encodeURIComponent(searchTerms)}`;
     if (court) query += `&court=${encodeURIComponent(court)}`;
     if (page != null) query += `&page=${page}`;
     if (pageSize != null) query += `&page_size=${pageSize}`;

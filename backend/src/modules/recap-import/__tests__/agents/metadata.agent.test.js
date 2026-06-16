@@ -40,6 +40,27 @@ describe("MetadataAgent", () => {
     );
   });
 
+  it("passes plainText and derives pdfUrl from filepathLocal", async () => {
+    const writer = createMockJsonWriter();
+    const agent = new MetadataAgent({ writer });
+
+    const result = await agent.run({
+      caseName: "Smith v. Hospital Corp",
+      courtId: "nysd",
+      docketId: "12345",
+      recapDocumentId: "98765",
+      plainText: "Original plain text content from CourtListener",
+      filepathLocal: "recap/gov.uscourts.nysd.12345/gov.uscourts.nysd.12345.42.0.pdf",
+      pdfAvailable: true,
+      plainTextAvailable: true,
+    });
+
+    expect(result.plainText).toBe("Original plain text content from CourtListener");
+    expect(result.pdfUrl).toBe("https://storage.courtlistener.com/recap/gov.uscourts.nysd.12345/gov.uscourts.nysd.12345.42.0.pdf");
+    expect(result.pdfAvailable).toBe(true);
+    expect(result.plainTextAvailable).toBe(true);
+  });
+
   it("handles missing optional fields without dropping raw payload", async () => {
     const writer = createMockJsonWriter();
     const agent = new MetadataAgent({ writer });

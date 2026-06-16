@@ -6,6 +6,10 @@ export class MetadataAgent {
   async run(candidate) {
     const normalizeId = (val) => val != null ? String(val) : null;
 
+    const pdfUrl = candidate.filepathLocal
+      ? `https://storage.courtlistener.com/${candidate.filepathLocal}`
+      : null;
+
     const metadata = {
       source: candidate.source ?? 'courtlistener',
       caseName: candidate.caseName ?? null,
@@ -20,9 +24,11 @@ export class MetadataAgent {
       description: candidate.description ?? null,
       dateFiled: candidate.dateFiled ?? null,
       absoluteUrl: candidate.absoluteUrl ?? null,
+      plainText: candidate.plainText ?? null,
       plainTextAvailable: candidate.plainTextAvailable ?? false,
-      ocrStatus: candidate.ocrStatus ?? null,
+      pdfUrl,
       pdfAvailable: candidate.pdfAvailable ?? false,
+      ocrStatus: candidate.ocrStatus ?? null,
       raw: candidate.raw ?? {},
     };
 

@@ -80,6 +80,30 @@ describe("CourtListenerClient", () => {
     ).rejects.toThrow(/CourtListener.*401/i);
   });
 
+  it("uses type=rd for document-level search, not type=r", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [] }),
+    });
+
+    const client = new CourtListenerClient({
+      baseUrl: "https://www.courtlistener.com/api/rest/v4",
+      token: "abc123",
+      fetchImpl: fetchMock,
+    });
+
+    await client.searchRecap({
+      searchTerms: "motion",
+      page: 1,
+      pageSize: 20,
+    });
+
+    const url = fetchMock.mock.calls[0][0];
+    expect(url).toContain("type=rd");
+    expect(url).not.toMatch(/[?&]type=r(?!d)/);
+    expect(url).not.toContain("type=o");
+  });
+
   it("does not expose PACER purchase or RECAP Fetch methods in MVP client", () => {
     const client = new CourtListenerClient({
       baseUrl: "https://www.courtlistener.com/api/rest/v4",
