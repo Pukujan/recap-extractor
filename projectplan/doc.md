@@ -1,16 +1,31 @@
-# RECAP Import Architecture Contract + Codex Handoff
+# RECAP Local Importer Architecture Contract + Codex/OpenCode Handoff
 
 Date: 2026-06-15  
-Project: Hades Legal Document Pipeline  
-Feature: RECAP Import Queue + Document Filing + OCR/Annotation/Extraction  
+Project: Local RECAP Legal Document Pipeline  
+Feature: RECAP Import Queue + Local Document Filing + Qwen-VL Parsing + Legal Annotation/Extraction  
 Build mode: TDD-first  
-Architecture mode: strict modular backend agents, simple frontend operator console  
+Runtime mode: real CourtListener API + real OpenRouter API  
+Storage mode: local repo files only  
+Frontend mode: simple operator console  
 
 ---
 
 ## Summary
 
-Build a RECAP document importer that lets the user search CourtListener/RECAP, request a target number of documents such as 10 or 100, queue those documents **one at a time**, process them through the legal document pipeline, and save everything into properly filed case folders.
+Build a local RECAP document importer.
+
+The user enters:
+
+```json
+{
+  "searchTerms": "medical malpractice expert report motion to compel",
+  "court": "optional",
+  "targetCount": 100,
+  "ocrMode": "recap_text_first"
+}
+```
+
+The backend uses the real CourtListener/RECAP API, creates a queue of matching documents, processes documents **one at a time**, uses existing RECAP text when usable, uses Qwen-VL through OpenRouter when visual parsing/OCR is required, annotates the document aggressively, writes structured legal JSON, flags review issues, and saves everything locally inside the repo.
 
 The frontend must stay simple:
 
@@ -25,18 +40,32 @@ Output folder path
 Open folder / copy folder path
 ```
 
-The frontend must **not** expose internal agents, stack file names, OCR boxes, extraction schemas, prompt versions, or backend artifacts.
-
-The backend does the actual work:
+The frontend must **not** expose:
 
 ```text
-RECAP search
+internal agents
+stack file names
+source.pdf
+parsed.md
+layout boxes
+OCR boxes
+extraction schema
+prompt versions
+eval details
+raw CourtListener payload
+backend artifacts
+```
+
+The backend does the real work:
+
+```text
+CourtListener RECAP search
 -> queue document tasks
 -> normalize metadata
 -> create case folders
 -> fetch source text/PDF
--> decide whether OCR is required
--> run OCR only when needed or forced
+-> decide whether OCR/vision parsing is required
+-> use Qwen-VL through OpenRouter only when needed or forced
 -> annotate aggressively
 -> flag human review issues
 -> extract strict legal JSON
@@ -48,15 +77,19 @@ RECAP search
 
 ## Non-Negotiable Architecture Contract
 
-Codex must follow this architecture exactly unless explicitly instructed otherwise.
+Codex/OpenCode must follow this architecture exactly.
 
 ```text
 Frontend = simple operator console
 Backend = modular agents/services
 Queue = one document at a time
+Storage = local repo folder only
+CourtListener = real API only
+OpenRouter = real API only
+Qwen-VL = MVP OCR/document vision parser
 Folder = actual product output
 Manifests = source of traceability
-Evals/tests = required per agent
+Tests/evals = required per agent
 ```
 
 Do not turn this into:
@@ -64,11 +97,107 @@ Do not turn this into:
 ```text
 a browser crawler
 a PACER buying tool
+a RECAP extension integration
 a full legal research platform
 a complex file explorer
-a giant autonomous agent
+a giant autonomous chatbot
 a LangGraph rewrite
+a Supabase storage system
+a remote storage system
+a fixture/demo runtime
 a frontend agent explainer
+```
+
+---
+
+## Runtime Guardrails
+
+Runtime must use real APIs.
+
+Do not add runtime fixture/fallback mode.
+
+Fixtures/mocks are allowed only in automated tests.
+
+### Runtime must not include
+
+```text
+RECAP_IMPORT_USE_FIXTURES
+fallback search data
+mock runtime mode
+silent fake documents
+demo fallback documents
+fallback OpenRouter models
+fallback OCR providers
+fallback local sample docs
+```
+
+### Missing credentials behavior
+
+If `COURTLISTENER_API_TOKEN` is missing, fail clearly:
+
+```json
+{
+  "error": "COURTLISTENER_API_TOKEN is required for RECAP imports"
+}
+```
+
+If `OPENROUTER_API_KEY` is missing, fail clearly:
+
+```json
+{
+  "error": "OPENROUTER_API_KEY is required for Qwen-VL parsing and legal extraction"
+}
+```
+
+No silent fallback.
+
+No fake results.
+
+No PACER purchase.
+
+No RECAP Fetch/pray-and-pay.
+
+---
+
+## Minimal `.env.example`
+
+Use only env values that are secrets or likely to change per environment.
+
+```env
+# CourtListener / RECAP
+COURTLISTENER_API_BASE_URL=https://www.courtlistener.com/api/rest/v4
+COURTLISTENER_API_TOKEN=replace_me
+
+# Local output
+RECAP_IMPORT_OUTPUT_ROOT=./data/recap-imports
+RECAP_IMPORT_MAX_TARGET_COUNT=100
+RECAP_IMPORT_QUEUE_CONCURRENCY=1
+
+# OCR / Vision parser through OpenRouter
+OCR_PROVIDER=qwen_vl
+OPENROUTER_API_KEY=replace_me
+OPENROUTER_API_BASE_URL=https://openrouter.ai/api/v1
+QWEN_VL_MODEL=qwen/qwen3-vl-8b-instruct
+
+# Legal extraction through OpenRouter
+LEGAL_EXTRACTION_MODEL=qwen/qwen3.6-35b-a3b-instruct
+
+# Safety: never buy PACER docs
+ALLOW_PACER_PURCHASE=false
+ALLOW_RECAP_FETCH=false
+```
+
+Add this to `.gitignore`:
+
+```gitignore
+.env
+.env.local
+.env.*.local
+
+data/recap-imports/
+data/tmp/
+data/logs/
+data/evals/
 ```
 
 ---
@@ -78,41 +207,31 @@ a frontend agent explainer
 
 ## Goal
 
-Create a working MVP that imports legal documents from CourtListener/RECAP into Hades and files them into case folders.
-
-User enters:
-
-```json
-{
-  "searchTerms": "medical malpractice expert report motion to compel",
-  "court": "optional",
-  "targetCount": 100,
-  "ocrMode": "recap_text_first"
-}
-```
+Create a working MVP that imports legal documents from CourtListener/RECAP into local repo folders.
 
 System behavior:
 
-1. Search CourtListener/RECAP.
-2. Collect up to `targetCount` matching document candidates.
-3. Deduplicate candidates.
-4. Create an import job.
-5. Create document tasks.
-6. Process document tasks one at a time.
-7. Save each document into a case folder.
-8. Preserve source metadata.
-9. Use CourtListener plain text when usable.
-10. Download source PDF when available.
-11. Run PaddleOCR only when required or forced.
-12. Annotate as much as possible inside backend artifacts.
-13. Flag handwriting, signatures, low-confidence OCR, bad pages, missing source, and uncertain extraction.
-14. Save strict extracted JSON.
-15. Save manifests and prompt/eval versions.
-16. Return only folder path/status to frontend.
+1. Accept search terms, optional court, target count, and OCR mode.
+2. Search CourtListener/RECAP using the real API.
+3. Collect up to `targetCount` matching document candidates.
+4. Deduplicate candidates.
+5. Create an import job.
+6. Create document tasks.
+7. Process document tasks one at a time.
+8. Save each document into a case folder.
+9. Preserve source metadata.
+10. Use CourtListener plain text when usable.
+11. Download source PDF when available.
+12. Run Qwen-VL only when OCR/vision parsing is required or forced.
+13. Annotate as much useful legal/document information as possible.
+14. Flag handwriting, signatures, low-confidence OCR, bad pages, missing source, and uncertain extraction.
+15. Save strict extracted JSON.
+16. Save manifests and prompt/eval versions.
+17. Return only folder path/status to frontend.
 
 ## Explicit non-goals
 
-Do not implement in MVP:
+Do not implement:
 
 ```text
 PACER purchase flow
@@ -127,8 +246,11 @@ document editor
 human correction UI
 billing
 new auth system
-public sharing
-multi-user permission model beyond existing auth
+Supabase storage
+remote storage
+fixture/demo runtime
+fallback API behavior
+multi-user permission model
 ```
 
 </details>
@@ -189,8 +311,6 @@ raw CourtListener payload
 
 ## Frontend response shape
 
-The frontend should consume this kind of API response:
-
 ```json
 {
   "jobId": "job_abc123",
@@ -218,12 +338,350 @@ The frontend should consume this kind of API response:
 }
 ```
 
-## Guardrail
+</details>
 
-If backend has many internal files, frontend still shows only:
+---
 
-```text
-Output folder: data/recap-imports/<case-folder>/
+<details>
+<summary>3. Frontend HTML Reference</summary>
+
+Use this as the reference UI. Keep it simple.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RECAP Import Console</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #171a23;
+      --panel2: #202431;
+      --text: #f5f6f8;
+      --muted: #aab1bf;
+      --line: #343a4a;
+      --accent: #8ab4ff;
+      --good: #7ee787;
+      --warn: #ffd166;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    header { margin-bottom: 20px; }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      letter-spacing: -0.04em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.22);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0d0f15;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 82px;
+      resize: vertical;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 16px;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: var(--accent);
+      color: #08111f;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin: 12px 0 0;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 4px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      border-radius: 999px;
+      padding: 4px 8px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .badge.good { color: var(--good); }
+    .badge.warn { color: var(--warn); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .section { margin-top: 18px; }
+
+    .folder-box {
+      background: #0d0f15;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .folder-path {
+      display: block;
+      margin: 10px 0 14px;
+      padding: 12px;
+      background: #080a0f;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #d7deea;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .folder-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .folder-actions a {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .grid, .status-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>RECAP Import Console</h1>
+      <p class="subtitle">
+        Search RECAP, queue a target number of documents, process them one at a time,
+        and save everything into a properly filed local case folder.
+      </p>
+    </header>
+
+    <section class="status-grid">
+      <div class="metric"><strong>100</strong><span>Target documents</span></div>
+      <div class="metric"><strong>1</strong><span>Queue concurrency</span></div>
+      <div class="metric"><strong>37</strong><span>Processed</span></div>
+      <div class="metric"><strong>8</strong><span>Need review</span></div>
+    </section>
+
+    <section class="grid">
+      <aside class="card">
+        <h2>Search & Import</h2>
+
+        <label>Search terms</label>
+        <textarea>medical malpractice expert report motion to compel</textarea>
+
+        <label>Target count</label>
+        <select>
+          <option>10 documents</option>
+          <option>25 documents</option>
+          <option>50 documents</option>
+          <option selected>100 documents</option>
+        </select>
+
+        <label>Court filter</label>
+        <input placeholder="Optional: nysd, nyed, ca2" />
+
+        <label>OCR mode</label>
+        <select>
+          <option selected>Use RECAP text first, OCR only when needed</option>
+          <option>Force Qwen-VL parsing for every downloaded PDF</option>
+        </select>
+
+        <button>Start Import Job</button>
+
+        <p class="hint">
+          The UI only shows the job and the final folder. Backend handles metadata,
+          Qwen-VL parsing, annotation, review flags, extracted JSON, and internal filing.
+        </p>
+      </aside>
+
+      <section>
+        <section class="card">
+          <h2>Current Job</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>Case</th>
+                <th>Status</th>
+                <th>Folder</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Doc 001 — Complaint</td>
+                <td>Smith v. Hospital Corp</td>
+                <td><span class="badge good">complete</span></td>
+                <td><a href="#">open folder</a></td>
+              </tr>
+              <tr>
+                <td>Doc 002 — Motion to Compel</td>
+                <td>Smith v. Hospital Corp</td>
+                <td><span class="badge warn">review needed</span></td>
+                <td><a href="#">open folder</a></td>
+              </tr>
+              <tr>
+                <td>Doc 003 — Expert Affidavit</td>
+                <td>Smith v. Hospital Corp</td>
+                <td><span class="badge">processing</span></td>
+                <td><a href="#">open folder</a></td>
+              </tr>
+              <tr>
+                <td>Doc 004–100</td>
+                <td>mixed results</td>
+                <td><span class="badge">queued</span></td>
+                <td>pending</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="card section">
+          <h2>Output Folder</h2>
+          <div class="folder-box">
+            <p class="hint" style="margin-top:0;">
+              All source files, parsed outputs, review flags, extracted JSON, manifests,
+              and metadata are saved inside this local case folder.
+            </p>
+
+            <span class="folder-path">
+              data/recap-imports/smith-v-hospital-corp__nysd__docket-12345/
+            </span>
+
+            <div class="folder-actions">
+              <a href="#">Open case folder</a>
+              <a href="#">Copy folder path</a>
+              <a href="#">Open latest processed document</a>
+            </div>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
 ```
 
 </details>
@@ -231,7 +689,7 @@ Output folder: data/recap-imports/<case-folder>/
 ---
 
 <details>
-<summary>3. Backend Module Layout</summary>
+<summary>4. Backend Module Layout</summary>
 
 Recommended structure:
 
@@ -248,7 +706,7 @@ backend/src/modules/recap-import/
     caseFolder.agent.js
     fetch.agent.js
     textTriage.agent.js
-    ocr.agent.js
+    documentVisionParser.agent.js
     reviewFlag.agent.js
     legalAnnotation.agent.js
     legalExtraction.agent.js
@@ -256,7 +714,8 @@ backend/src/modules/recap-import/
 
   clients/
     courtListener.client.js
-    paddleOcr.client.js
+    openRouterVision.client.js
+    openRouterText.client.js
 
   repositories/
     recapJob.repository.js
@@ -269,6 +728,7 @@ backend/src/modules/recap-import/
     recapCandidate.schema.js
     sourceMetadata.schema.js
     textTriage.schema.js
+    qwenVisionPage.schema.js
     reviewFlags.schema.js
     legalAnnotations.schema.js
     extractedLegal.schema.js
@@ -280,9 +740,11 @@ backend/src/modules/recap-import/
     hash.service.js
     jsonWriter.service.js
     evalWriter.service.js
+    pdfToImage.service.js
+    config.service.js
 ```
 
-Each agent must be a modular service with this shape:
+Each agent must be modular:
 
 ```text
 input DTO -> run() -> output DTO -> write artifacts if responsible -> return status
@@ -295,7 +757,7 @@ No agent should return loose prose to another backend step.
 ---
 
 <details>
-<summary>4. Agent Contract Rule</summary>
+<summary>5. Agent Contract Rule</summary>
 
 Every agent must have:
 
@@ -338,6 +800,8 @@ fetch extra documents unless that is their job
 expose internals to frontend
 swallow errors without status
 skip manifest writing
+use fixture data in runtime
+fallback to other models/providers silently
 ```
 
 </details>
@@ -345,7 +809,7 @@ skip manifest writing
 ---
 
 <details>
-<summary>5. Agents to Build</summary>
+<summary>6. Agents to Build</summary>
 
 ## 1. RECAP Search Agent
 
@@ -366,12 +830,14 @@ Search CourtListener/RECAP using the user’s search terms and return document c
 ### Process
 
 ```text
+validate COURTLISTENER_API_TOKEN exists
 build CourtListener search query
 page through results until target count or no more results
 dedupe by recapDocumentId / docketEntryId / absoluteUrl
 prefer documents with plain text or PDF availability
 preserve source metadata
 do not trigger PACER purchase
+do not use fixtures/fallbacks at runtime
 ```
 
 ### Output
@@ -396,13 +862,16 @@ do not trigger PACER purchase
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
+requires COURTLISTENER_API_TOKEN
+calls CourtListener client with token auth
 returns up to targetCount
 dedupes duplicate documents
 preserves source IDs
 does not call PACER purchase flow
+does not use runtime fixtures
 handles empty result set
 ```
 
@@ -461,7 +930,7 @@ failed
 skipped_duplicate
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
 only one task runs at a time
@@ -469,6 +938,7 @@ pending tasks remain pending when one is running
 failed task records error
 review_needed task increments review count
 duplicate task is skipped
+queue state is persisted locally
 ```
 
 ---
@@ -533,13 +1003,14 @@ raw source payload
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
 preserves all known fields
 handles missing optional fields
 does not drop raw source payload
 normalizes IDs as strings
+writes source_metadata.json
 ```
 
 ---
@@ -548,7 +1019,7 @@ normalizes IDs as strings
 
 ### Purpose
 
-Create stable case and document folder paths.
+Create stable local case and document folder paths.
 
 ### Input
 
@@ -590,7 +1061,7 @@ dedupe conflicts with suffix
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
 creates safe folder names
@@ -598,6 +1069,7 @@ removes slashes
 handles punctuation
 dedupes collisions
 returns stable path for same input
+creates folders locally
 ```
 
 ---
@@ -626,6 +1098,7 @@ hash downloaded PDF
 write download metadata
 mark unavailable if no text and no PDF
 do not buy PACER documents
+do not use fallback documents
 ```
 
 ### Output
@@ -643,7 +1116,7 @@ do not buy PACER documents
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
 saves plain text
@@ -651,6 +1124,8 @@ downloads PDF when available
 does not download when unavailable
 marks source unavailable
 writes hashes
+does not buy PACER docs
+does not use fallback documents
 ```
 
 ---
@@ -659,7 +1134,7 @@ writes hashes
 
 ### Purpose
 
-Decide whether PaddleOCR is required.
+Decide whether Qwen-VL parsing is required.
 
 ### Input
 
@@ -676,7 +1151,7 @@ Decide whether PaddleOCR is required.
 }
 ```
 
-### OCR trigger formula
+### OCR/vision trigger formula
 
 ```ts
 requiresOcr =
@@ -690,21 +1165,23 @@ requiresOcr =
   documentNeedsCoordinateReview
 ```
 
-### OCR trigger details
+### OCR/vision trigger details
 
 | Trigger | Reason |
 |---|---|
-| `forceOcr=true` | User explicitly requested OCR on every document. |
+| `forceOcr=true` | User explicitly requested visual parsing on every document. |
 | No CourtListener `plain_text` | There is no usable text to extract from. |
 | Empty or near-empty `plain_text` | Likely scanned PDF or failed text extraction. |
 | Text too short for page count | Example: 20-page PDF with only 500 characters. |
 | Text looks garbled | Random symbols, broken words, repeated whitespace, extraction noise. |
-| PDF exists but text is missing | Source likely needs OCR. |
+| PDF exists but text is missing | Source likely needs OCR/vision parsing. |
 | RECAP `ocr_status` is failed/incomplete/partial/unavailable | Existing OCR cannot be trusted. |
 | Document likely needs layout parsing | Tables, forms, exhibits, charts, structured pages. |
-| Coordinate review is needed | Signatures, handwriting, seals, stamps, low-confidence areas. |
+| Coordinate/page review is needed | Signatures, handwriting, seals, stamps, low-confidence areas. |
 
 ### MVP thresholds
+
+These should live in code config, not env:
 
 ```ts
 const MIN_TEXT_CHARS = 1000;
@@ -773,7 +1250,7 @@ function shouldRequireOcr(input) {
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
 returns requiresOcr=false when RECAP plain text is usable
@@ -789,58 +1266,145 @@ returns requiresOcr=false when neither PDF nor text is available, but marks sour
 
 ---
 
-## 7. OCR Agent
+## 7. Document Vision Parser Agent
 
 ### Purpose
 
-Run PaddleOCR/PaddleOCR-VL when needed, or normalize existing text into parsed artifacts.
+Use Qwen-VL through OpenRouter when visual parsing is required, or normalize existing RECAP text into parsed artifacts.
+
+### Runtime provider
+
+```text
+OCR_PROVIDER=qwen_vl
+```
+
+No fallback provider in MVP.
+
+If `OCR_PROVIDER` is not `qwen_vl`, fail clearly.
 
 ### Input
 
 ```json
 {
-  "requiresOcr": true,
+  "provider": "qwen_vl",
+  "model": "qwen/qwen3-vl-8b-instruct",
+  "documentFolderPath": "data/recap-imports/.../documents/doc-001-complaint/",
   "pdfPath": "source/source.pdf",
-  "plainTextPath": "source/courtlistener_plain_text.txt",
-  "folders": {}
+  "pageImages": [
+    "pages/page-001.png",
+    "pages/page-002.png"
+  ],
+  "plainText": "",
+  "requiresOcr": true,
+  "reason": "plain_text_missing"
 }
 ```
 
 ### Process
 
 ```text
-if requiresOcr=true, run PaddleOCR
+validate OPENROUTER_API_KEY exists
+validate QWEN_VL_MODEL exists
 if requiresOcr=false, create parsed artifacts from existing plain text
-split long PDFs by page/chunk
-save parsed markdown
-save page-level text
-save layout boxes when available
-save OCR confidence when available
-save parser/model/runtime metadata
+if requiresOcr=true, convert PDF pages to images if needed
+send one page image at a time to Qwen-VL through OpenRouter
+ask for strict JSON only
+ask for page-level transcription
+ask for layout summary
+ask for likely signatures/handwriting/seals/stamps
+ask for uncertainty markers
+save parsed text and structured page output
+mark bboxAvailable=false unless the model returns trustworthy coordinates
+```
+
+### Qwen-VL prompt contract
+
+```text
+You are a document vision parser for legal filings.
+
+Task:
+Read the provided document page image and extract as much useful document text and legal/document structure as possible.
+
+Return strict JSON only.
+
+Do not invent facts.
+If text is uncertain, mark it as uncertain.
+If handwriting, signature, stamp, seal, table, exhibit label, or unreadable area appears, flag it.
+If exact bounding boxes are not available, use page-level flags and set bboxAvailable=false.
+
+Required JSON shape:
+{
+  "page": number,
+  "transcribedText": string,
+  "layoutSummary": {
+    "hasHeader": boolean,
+    "hasFooter": boolean,
+    "hasTable": boolean,
+    "hasSignatureBlock": boolean,
+    "hasHandwriting": boolean,
+    "hasSealOrStamp": boolean,
+    "hasExhibitLabel": boolean
+  },
+  "legalHints": {
+    "possibleDocumentType": string | null,
+    "possibleMotionType": string | null,
+    "partyNames": string[],
+    "attorneyNames": string[],
+    "courtNames": string[],
+    "dates": string[],
+    "legalTerms": string[]
+  },
+  "reviewFlags": [
+    {
+      "flagType": string,
+      "severity": "low" | "medium" | "high",
+      "page": number,
+      "reason": string,
+      "confidence": number,
+      "bboxAvailable": false,
+      "bbox": null
+    }
+  ],
+  "confidence": {
+    "text": number,
+    "layout": number,
+    "legalHints": number
+  }
+}
 ```
 
 ### Output
 
 ```json
 {
+  "usedOcr": true,
+  "provider": "qwen_vl",
+  "model": "qwen/qwen3-vl-8b-instruct",
+  "bboxAvailable": false,
+  "coordinateReviewPrecision": "page_level_only",
   "parsedTextPath": "parsed/parsed.md",
   "parsedPagesPath": "parsed/parsed_pages.json",
-  "layoutBoxesPath": "parsed/layout_boxes.json",
+  "layoutSummaryPath": "parsed/layout_summary.json",
   "ocrQualityReportPath": "parsed/ocr_quality_report.json",
-  "parser": "paddleocr-vl",
-  "usedOcr": true
+  "reviewFlagsPath": "review/review_flags.json"
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
-uses OCR when triage requires it
-skips OCR when text is usable
+requires OPENROUTER_API_KEY
+requires QWEN_VL_MODEL
+calls OpenRouterVisionClient when OCR is required
+does not call Qwen-VL when RECAP plain text is usable
 writes parsed.md
 writes parsed_pages.json
-writes layout_boxes.json when OCR returns boxes
-records parser metadata
+writes layout_summary.json
+writes ocr_quality_report.json
+marks bboxAvailable=false when no coordinates exist
+creates page-level review flags
+does not use fallback model when Qwen model fails
+fails clearly on OpenRouter error
 ```
 
 ---
@@ -851,12 +1415,14 @@ records parser metadata
 
 Flag document/page/coordinate regions that need human review.
 
+For Qwen-VL MVP, review flags are usually page-level, not verified coordinate-level.
+
 ### Input
 
 ```json
 {
   "parsedPages": [],
-  "layoutBoxes": [],
+  "layoutSummary": [],
   "ocrQuality": {},
   "metadata": {}
 }
@@ -892,26 +1458,23 @@ party_name_uncertain
       "flagType": "signature_possible",
       "severity": "medium",
       "page": 7,
-      "bbox": {
-        "x": 412,
-        "y": 921,
-        "w": 280,
-        "h": 96
-      },
-      "reason": "Visual mark near signature block with sparse OCR text",
+      "bboxAvailable": false,
+      "bbox": null,
+      "reason": "Qwen-VL detected a likely signature block near the end of the page.",
       "confidence": 0.82
     }
   ]
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
-flags low-confidence OCR boxes
+flags low-confidence text
 flags possible signature blocks
 flags possible handwriting
-preserves page and bbox
+preserves page
+sets bboxAvailable=false for Qwen-VL page-level flags
 sets reviewRequired=true when flags exist
 sets reviewRequired=false when no flags exist
 ```
@@ -1005,7 +1568,7 @@ Never convert uncertain OCR into certain fact.
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
 annotates motion to compel
@@ -1022,7 +1585,18 @@ does not invent missing legal facts
 
 ### Purpose
 
-Convert annotations and parsed text into strict legal JSON.
+Convert annotations and parsed text into strict legal JSON using OpenRouter text model.
+
+### Input
+
+```json
+{
+  "annotations": {},
+  "parsed": {},
+  "metadata": {},
+  "review": {}
+}
+```
 
 ### Output schema
 
@@ -1065,19 +1639,21 @@ Convert annotations and parsed text into strict legal JSON.
 
 ### Guardrail
 
-Output must be strict JSON.
-
+```text
+Output strict JSON only.
 No markdown.
-
 No prose.
-
 No unsupported facts.
-
 Each extracted fact should include provenance when possible.
+No fallback model.
+Fail clearly if OpenRouter call fails.
+```
 
-### Evals/tests
+### Tests/evals
 
 ```text
+requires OPENROUTER_API_KEY
+requires LEGAL_EXTRACTION_MODEL
 returns valid JSON
 matches schema
 extracts parties/dates/legal terms
@@ -1085,6 +1661,7 @@ includes confidence object
 includes review flags
 does not return markdown prose
 does not invent absent parties
+fails clearly on model/API error
 ```
 
 ---
@@ -1103,8 +1680,9 @@ document task id
 source ids
 folder paths
 source hashes
-parser version
-OCR model version
+parser provider
+Qwen-VL model
+legal extraction model
 prompt version
 schema version
 eval version
@@ -1133,6 +1711,9 @@ file references
     "documentFolderPath": "data/recap-imports/.../documents/doc-001-complaint/"
   },
   "versions": {
+    "visionProvider": "qwen_vl",
+    "visionModel": "qwen/qwen3-vl-8b-instruct",
+    "legalExtractionModel": "qwen/qwen3.6-35b-a3b-instruct",
     "promptContractVersion": "recap-legal-extraction-v1",
     "schemaVersion": "recap-extracted-legal-json-v1",
     "evalVersion": "recap-import-eval-v1"
@@ -1140,14 +1721,14 @@ file references
 }
 ```
 
-### Evals/tests
+### Tests/evals
 
 ```text
 writes manifest after success
 writes manifest after review-needed
 writes error manifest after failure
 includes source IDs
-includes version metadata
+includes model/version metadata
 includes folder paths
 ```
 
@@ -1156,7 +1737,7 @@ includes folder paths
 ---
 
 <details>
-<summary>6. Orchestrator Contract</summary>
+<summary>7. Orchestrator Contract</summary>
 
 `recapImport.service.js` owns orchestration.
 
@@ -1173,7 +1754,7 @@ export class RecapImportService {
     caseFolderAgent,
     fetchAgent,
     textTriageAgent,
-    ocrAgent,
+    documentVisionParserAgent,
     reviewFlagAgent,
     legalAnnotationAgent,
     legalExtractionAgent,
@@ -1186,7 +1767,7 @@ export class RecapImportService {
       caseFolderAgent,
       fetchAgent,
       textTriageAgent,
-      ocrAgent,
+      documentVisionParserAgent,
       reviewFlagAgent,
       legalAnnotationAgent,
       legalExtractionAgent,
@@ -1234,10 +1815,11 @@ export class RecapImportService {
         needsCoordinateReview: task.needsCoordinateReview
       });
 
-      const parsed = await this.ocrAgent.run({
+      const parsed = await this.documentVisionParserAgent.run({
         triage,
         fetched,
-        folders
+        folders,
+        provider: "qwen_vl"
       });
 
       const review = await this.reviewFlagAgent.run({
@@ -1285,6 +1867,7 @@ export class RecapImportService {
       };
     } catch (error) {
       await this.queueAgent.markFailed(task.id, error);
+      await this.manifestAgent.runError({ task, error });
       throw error;
     }
   }
@@ -1297,6 +1880,8 @@ Guardrail:
 Only orchestrator decides workflow order.
 Individual agents do not call unrelated agents.
 Frontend does not call agents directly.
+Runtime does not use fixtures.
+Runtime does not use fallback providers or fallback models.
 ```
 
 </details>
@@ -1304,7 +1889,7 @@ Frontend does not call agents directly.
 ---
 
 <details>
-<summary>7. Storage / Folder Contract</summary>
+<summary>8. Local Storage / Folder Contract</summary>
 
 Frontend shows only the case folder path.
 
@@ -1326,7 +1911,8 @@ data/recap-imports/
         parsed/
           parsed.md
           parsed_pages.json
-          layout_boxes.json
+          layout_summary.json
+          layout_boxes.json        # only if verified/usable boxes exist
           ocr_quality_report.json
         review/
           review_flags.json
@@ -1361,7 +1947,27 @@ Frontend must receive only:
 ---
 
 <details>
-<summary>8. Database / Repository Contract</summary>
+<summary>9. Local Queue / Repository Contract</summary>
+
+Use local repo persistence.
+
+Preferred MVP:
+
+```text
+local SQLite queue DB under ./data/recap-imports/queue.sqlite
+```
+
+Alternative if repo does not use SQLite:
+
+```text
+JSON-backed local queue state under ./data/recap-imports/queue_status.json
+```
+
+Do not use Supabase.
+
+Do not use external storage.
+
+Do not require Redis/BullMQ for MVP.
 
 ## recap_import_jobs
 
@@ -1369,7 +1975,6 @@ Fields:
 
 ```text
 id
-user_id
 search_terms
 court_filter
 target_count
@@ -1457,7 +2062,7 @@ updated_at
 ---
 
 <details>
-<summary>9. API Contract</summary>
+<summary>10. API Contract</summary>
 
 ## POST /api/recap-import/jobs
 
@@ -1480,6 +2085,12 @@ targetCount defaults to 10
 targetCount max 100
 ocrMode enum: recap_text_first | force_ocr
 court optional
+COURTLISTENER_API_TOKEN required
+OPENROUTER_API_KEY required
+QWEN_VL_MODEL required
+LEGAL_EXTRACTION_MODEL required
+ALLOW_PACER_PURCHASE must not be true
+ALLOW_RECAP_FETCH must not be true
 ```
 
 Response:
@@ -1548,14 +2159,14 @@ Response can include task statuses but should not include internal artifact name
 ---
 
 <details>
-<summary>10. Modern Agent Requirements</summary>
+<summary>11. Modern Agent Requirements</summary>
 
 Every agent should support:
 
 ```text
 input/output schema
 versioned logic or prompt
-eval/test
+test/eval
 run trace
 source provenance
 confidence/uncertainty
@@ -1566,7 +2177,7 @@ cost/rate-limit controls
 tool boundary
 artifact manifest
 reprocess ability
-security/PII guard
+local file safety
 ```
 
 ## Required run trace
@@ -1597,8 +2208,8 @@ Queue Agent queues only.
 Metadata Agent normalizes only.
 Folder Agent creates paths/folders only.
 Fetch Agent fetches source artifacts only.
-Triage Agent decides OCR only.
-OCR Agent parses text/layout only.
+Triage Agent decides OCR/vision parsing only.
+Document Vision Parser Agent parses text/layout only.
 Review Flag Agent flags review issues only.
 Annotation Agent annotates legal concepts only.
 Extraction Agent writes strict legal JSON only.
@@ -1610,7 +2221,7 @@ Manifest Agent writes trace/version metadata only.
 ---
 
 <details>
-<summary>11. Eval Contract</summary>
+<summary>12. Eval Contract</summary>
 
 Every agent must have at least one test or eval.
 
@@ -1618,9 +2229,14 @@ Use this rule:
 
 ```text
 Deterministic agent -> unit/contract tests
-OCR/LLM/annotation agent -> eval cases + golden outputs + confidence checks
-Whole pipeline -> integration eval
+Qwen-VL/OpenRouter/legal agent -> mocked client tests + golden output checks
+Whole pipeline -> integration test with mocked clients
+Runtime smoke test -> optional, real API, manually run only
 ```
+
+Runtime must not use fixtures.
+
+Tests can use mocked clients and static test payloads.
 
 Recommended eval folder:
 
@@ -1642,10 +2258,10 @@ evals/recap-import/
     requires_ocr.eval.json
     skip_ocr_when_text_good.eval.json
 
-  ocr-agent/
-    scanned_pdf.eval.json
-    table_layout.eval.json
-    low_confidence_boxes.eval.json
+  document-vision-parser-agent/
+    qwen_page_parse.eval.json
+    qwen_signature_flag.eval.json
+    qwen_page_level_review.eval.json
 
   review-flag-agent/
     signature_detection.eval.json
@@ -1689,7 +2305,7 @@ Each eval result should save:
 ---
 
 <details>
-<summary>12. Prompt / Schema / Version Metadata</summary>
+<summary>13. Prompt / Schema / Version Metadata</summary>
 
 Every extraction should save:
 
@@ -1701,10 +2317,13 @@ Every extraction should save:
   "reviewFlagPromptVersion": "human-review-flags-v1",
   "schemaVersion": "recap-extracted-legal-json-v1",
   "evalVersion": "recap-import-eval-v1",
-  "ocrParser": {
-    "name": "paddleocr",
-    "model": "paddleocr-vl",
-    "version": "configured_runtime_version"
+  "visionParser": {
+    "provider": "qwen_vl",
+    "model": "qwen/qwen3-vl-8b-instruct"
+  },
+  "legalExtraction": {
+    "provider": "openrouter",
+    "model": "qwen/qwen3.6-35b-a3b-instruct"
   },
   "createdAt": "ISO_TIMESTAMP"
 }
@@ -1717,10 +2336,11 @@ Annotate aggressively.
 Preserve uncertainty.
 Attach source spans/page refs when possible.
 Never invent facts not present in source.
-Mark OCR uncertainty.
+Mark OCR/vision uncertainty.
 Mark missing source data.
 Return strict JSON only for JSON tasks.
 Keep legal output assistive, not authoritative.
+Do not use fallback models.
 ```
 
 </details>
@@ -1728,7 +2348,7 @@ Keep legal output assistive, not authoritative.
 ---
 
 <details>
-<summary>13. TDD Plan</summary>
+<summary>14. TDD Plan</summary>
 
 Use existing repo test framework.
 
@@ -1745,38 +2365,46 @@ metadata.agent.test.js
 caseFolder.agent.test.js
 fetch.agent.test.js
 textTriage.agent.test.js
-ocr.agent.test.js
+documentVisionParser.agent.test.js
+openRouterVision.client.test.js
+openRouterText.client.test.js
 reviewFlag.agent.test.js
 legalAnnotation.agent.test.js
 legalExtraction.agent.test.js
 manifest.agent.test.js
 recapImport.integration.test.js
+recapImport.frontend.test.js
 ```
 
-## Required tests
-
-### Route tests
+## Required route tests
 
 ```text
 creates import job from search terms
 rejects targetCount over 100
 defaults targetCount to 10
 rejects missing searchTerms
+rejects missing COURTLISTENER_API_TOKEN
+rejects missing OPENROUTER_API_KEY
+rejects when ALLOW_PACER_PURCHASE=true
+rejects when ALLOW_RECAP_FETCH=true
 returns frontend-safe job status
 does not expose internal artifact file names
 ```
 
-### Search agent tests
+## Required search agent tests
 
 ```text
+requires COURTLISTENER_API_TOKEN
+calls CourtListener client with token auth header
 returns up to targetCount
 dedupes duplicate documents
 preserves source IDs
 handles empty result set
 does not trigger PACER purchase
+does not use runtime fixtures
 ```
 
-### Queue agent tests
+## Required queue agent tests
 
 ```text
 creates tasks from candidates
@@ -1785,18 +2413,20 @@ marks complete
 marks review_needed
 marks failed with error
 skips duplicate
+persists local queue state
 ```
 
-### Metadata agent tests
+## Required metadata agent tests
 
 ```text
 normalizes raw CourtListener fields
 preserves raw payload
 handles missing optional fields
 keeps IDs stable as strings
+writes source_metadata.json
 ```
 
-### Folder agent tests
+## Required folder agent tests
 
 ```text
 creates safe case folder path
@@ -1804,9 +2434,10 @@ removes slashes
 removes unsafe punctuation
 dedupes collisions
 creates document folder path
+writes folders locally under RECAP_IMPORT_OUTPUT_ROOT
 ```
 
-### Fetch agent tests
+## Required fetch agent tests
 
 ```text
 saves plain text when available
@@ -1814,9 +2445,10 @@ downloads PDF when available
 hashes PDF
 marks sourceUnavailable when no PDF/text
 does not buy PACER docs
+does not use fallback documents
 ```
 
-### Text triage tests
+## Required text triage tests
 
 ```text
 returns requiresOcr=false when RECAP plain text is usable
@@ -1830,27 +2462,35 @@ returns requiresOcr=true when coordinate review is required
 returns sourceUnavailable when neither PDF nor text exists
 ```
 
-### OCR agent tests
+## Required Qwen-VL parser tests
 
 ```text
-runs OCR when required
-skips OCR when text usable
-writes parsed artifacts
-records parser version
-preserves page-level output
+requires OPENROUTER_API_KEY
+requires QWEN_VL_MODEL
+calls OpenRouterVisionClient when OCR is required
+does not call Qwen-VL when RECAP plain text is usable
+writes parsed.md
+writes parsed_pages.json
+writes layout_summary.json
+writes ocr_quality_report.json
+marks bboxAvailable=false when no coordinates exist
+creates page-level review flags
+does not use fallback model when Qwen model fails
+fails clearly on OpenRouter error
 ```
 
-### Review flag tests
+## Required review flag tests
 
 ```text
-flags low-confidence OCR boxes
+flags low-confidence OCR/vision text
 flags possible signatures
 flags possible handwriting
-preserves bbox
+preserves page
+sets bboxAvailable=false for Qwen-VL page-level flags
 sets reviewRequired
 ```
 
-### Legal annotation tests
+## Required legal annotation tests
 
 ```text
 annotates motion type
@@ -1861,31 +2501,53 @@ includes confidence
 does not invent unsupported facts
 ```
 
-### Legal extraction tests
+## Required legal extraction tests
 
 ```text
+requires OPENROUTER_API_KEY
+requires LEGAL_EXTRACTION_MODEL
 returns strict JSON
 matches schema
 includes confidence
 includes review flags
 includes provenance where available
 does not return markdown
+does not use fallback model
+does not invent absent parties
+fails clearly on OpenRouter error
 ```
 
-### Manifest tests
+## Required manifest tests
 
 ```text
 writes document manifest
 writes prompt/eval version metadata
 records source IDs
+records Qwen-VL model
+records legal extraction model
 records status
 records errors
 ```
 
-### Integration tests
+## Required frontend tests
 
 ```text
-mock 3-document RECAP job
+renders search form
+renders target count selector
+renders OCR mode selector
+renders job status metrics
+renders output folder path
+does not render internal stack names
+does not render internal artifact names
+does not render mini-agent names
+```
+
+## Required integration tests
+
+```text
+mock CourtListener client for 3-document job
+mock OpenRouter vision client
+mock OpenRouter text client
 process queue sequentially
 create folders
 write manifests
@@ -1901,7 +2563,7 @@ verify final status counts
 ---
 
 <details>
-<summary>14. Red Test Skeletons</summary>
+<summary>15. Red Test Skeletons</summary>
 
 Adapt imports/paths to existing repo style.
 
@@ -1910,6 +2572,17 @@ Adapt imports/paths to existing repo style.
 ```js
 describe("RECAP Import routes", () => {
   it("creates an import job from search terms", async () => {
+    const app = createTestApp({
+      env: {
+        COURTLISTENER_API_TOKEN: "test_token",
+        OPENROUTER_API_KEY: "test_openrouter",
+        QWEN_VL_MODEL: "qwen/qwen3-vl-8b-instruct",
+        LEGAL_EXTRACTION_MODEL: "qwen/qwen3.6-35b-a3b-instruct",
+        ALLOW_PACER_PURCHASE: "false",
+        ALLOW_RECAP_FETCH: "false"
+      }
+    });
+
     const res = await request(app)
       .post("/api/recap-import/jobs")
       .send({
@@ -1925,6 +2598,8 @@ describe("RECAP Import routes", () => {
   });
 
   it("rejects targetCount over 100", async () => {
+    const app = createTestAppWithValidEnv();
+
     const res = await request(app)
       .post("/api/recap-import/jobs")
       .send({
@@ -1937,7 +2612,52 @@ describe("RECAP Import routes", () => {
     expect(res.body.error).toMatch(/targetCount/i);
   });
 
+  it("rejects missing CourtListener token", async () => {
+    const app = createTestApp({
+      env: {
+        COURTLISTENER_API_TOKEN: "",
+        OPENROUTER_API_KEY: "test_openrouter",
+        QWEN_VL_MODEL: "qwen/qwen3-vl-8b-instruct",
+        LEGAL_EXTRACTION_MODEL: "qwen/qwen3.6-35b-a3b-instruct"
+      }
+    });
+
+    const res = await request(app)
+      .post("/api/recap-import/jobs")
+      .send({
+        searchTerms: "motion to compel",
+        targetCount: 10,
+        ocrMode: "recap_text_first"
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/COURTLISTENER_API_TOKEN/i);
+  });
+
+  it("rejects missing OpenRouter key", async () => {
+    const app = createTestApp({
+      env: {
+        COURTLISTENER_API_TOKEN: "test_token",
+        OPENROUTER_API_KEY: "",
+        QWEN_VL_MODEL: "qwen/qwen3-vl-8b-instruct",
+        LEGAL_EXTRACTION_MODEL: "qwen/qwen3.6-35b-a3b-instruct"
+      }
+    });
+
+    const res = await request(app)
+      .post("/api/recap-import/jobs")
+      .send({
+        searchTerms: "motion to compel",
+        targetCount: 10,
+        ocrMode: "recap_text_first"
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/OPENROUTER_API_KEY/i);
+  });
+
   it("returns frontend-safe job status without internal file list", async () => {
+    const app = createTestAppWithValidEnv();
     const job = await seedRecapJobWithCompletedFolder();
 
     const res = await request(app)
@@ -1951,6 +2671,96 @@ describe("RECAP Import routes", () => {
     expect(serialized).not.toContain("parsed.md");
     expect(serialized).not.toContain("extracted_legal.json");
     expect(serialized).not.toContain("prompt_eval_versions.json");
+    expect(serialized).not.toContain("layout_boxes.json");
+  });
+});
+```
+
+## recapSearch.agent.test.js
+
+```js
+describe("RecapSearchAgent", () => {
+  it("requires CourtListener token", async () => {
+    const agent = createRecapSearchAgent({
+      courtListenerClient: mockCourtListenerClient(),
+      config: {
+        courtListenerToken: ""
+      }
+    });
+
+    await expect(
+      agent.run({
+        searchTerms: "motion to compel",
+        targetCount: 10
+      })
+    ).rejects.toThrow(/COURTLISTENER_API_TOKEN/i);
+  });
+
+  it("returns up to targetCount and dedupes results", async () => {
+    const courtListenerClient = {
+      searchRecap: vi.fn().mockResolvedValue({
+        results: [
+          {
+            recapDocumentId: "1",
+            docketEntryId: "a",
+            caseName: "Smith v Hospital",
+            absoluteUrl: "url-1"
+          },
+          {
+            recapDocumentId: "1",
+            docketEntryId: "a",
+            caseName: "Smith v Hospital",
+            absoluteUrl: "url-1"
+          },
+          {
+            recapDocumentId: "2",
+            docketEntryId: "b",
+            caseName: "Jones v Clinic",
+            absoluteUrl: "url-2"
+          }
+        ]
+      })
+    };
+
+    const agent = createRecapSearchAgent({
+      courtListenerClient,
+      config: {
+        courtListenerToken: "test"
+      }
+    });
+
+    const result = await agent.run({
+      searchTerms: "motion to compel",
+      targetCount: 2
+    });
+
+    expect(result.candidates).toHaveLength(2);
+    expect(new Set(result.candidates.map(c => c.recapDocumentId)).size).toBe(2);
+  });
+
+  it("does not trigger PACER purchase", async () => {
+    const courtListenerClient = {
+      searchRecap: vi.fn().mockResolvedValue({ results: [] }),
+      recapFetch: vi.fn(),
+      buyPacerDocument: vi.fn()
+    };
+
+    const agent = createRecapSearchAgent({
+      courtListenerClient,
+      config: {
+        courtListenerToken: "test",
+        allowPacerPurchase: false,
+        allowRecapFetch: false
+      }
+    });
+
+    await agent.run({
+      searchTerms: "expert report",
+      targetCount: 10
+    });
+
+    expect(courtListenerClient.recapFetch).not.toHaveBeenCalled();
+    expect(courtListenerClient.buyPacerDocument).not.toHaveBeenCalled();
   });
 });
 ```
@@ -1975,6 +2785,27 @@ describe("QueueAgent", () => {
     const tasks = await queue.listTasks("job_1");
     expect(tasks.filter(t => t.status === "running")).toHaveLength(1);
     expect(tasks.filter(t => t.status === "pending")).toHaveLength(2);
+  });
+
+  it("marks review_needed and increments review count", async () => {
+    const queue = createQueueAgent({ concurrency: 1 });
+
+    await queue.enqueueMany("job_1", [
+      { id: "task_1", status: "pending" }
+    ]);
+
+    const task = await queue.claimNext("job_1");
+
+    await queue.markComplete(task.id, {
+      reviewRequired: true,
+      folderPath: "data/recap-imports/case"
+    });
+
+    const updated = await queue.getTask(task.id);
+    expect(updated.status).toBe("review_needed");
+
+    const job = await queue.getJob("job_1");
+    expect(job.reviewNeeded).toBe(1);
   });
 });
 ```
@@ -2096,37 +2927,190 @@ describe("TextTriageAgent", () => {
 });
 ```
 
+## documentVisionParser.agent.test.js
+
+```js
+describe("DocumentVisionParserAgent", () => {
+  it("requires OpenRouter API key", async () => {
+    const agent = createDocumentVisionParserAgent({
+      openRouterVisionClient: mockOpenRouterVisionClient(),
+      config: {
+        openRouterApiKey: "",
+        qwenVlModel: "qwen/qwen3-vl-8b-instruct"
+      }
+    });
+
+    await expect(
+      agent.run({
+        triage: { requiresOcr: true },
+        fetched: { pdfExists: true, pageImages: ["page-001.png"] },
+        folders: mockFolders()
+      })
+    ).rejects.toThrow(/OPENROUTER_API_KEY/i);
+  });
+
+  it("calls OpenRouterVisionClient when OCR is required", async () => {
+    const openRouterVisionClient = {
+      parsePageImage: vi.fn().mockResolvedValue({
+        page: 1,
+        transcribedText: "Plaintiff moves to compel discovery.",
+        layoutSummary: {
+          hasHeader: true,
+          hasFooter: false,
+          hasTable: false,
+          hasSignatureBlock: false,
+          hasHandwriting: false,
+          hasSealOrStamp: false,
+          hasExhibitLabel: false
+        },
+        legalHints: {
+          possibleDocumentType: "motion",
+          possibleMotionType: "motion_to_compel",
+          partyNames: ["Plaintiff"],
+          attorneyNames: [],
+          courtNames: [],
+          dates: [],
+          legalTerms: ["discovery"]
+        },
+        reviewFlags: [],
+        confidence: {
+          text: 0.86,
+          layout: 0.8,
+          legalHints: 0.72
+        }
+      })
+    };
+
+    const agent = createDocumentVisionParserAgent({
+      openRouterVisionClient,
+      config: {
+        openRouterApiKey: "test",
+        qwenVlModel: "qwen/qwen3-vl-8b-instruct"
+      }
+    });
+
+    const result = await agent.run({
+      triage: {
+        requiresOcr: true,
+        reason: "plain_text_missing"
+      },
+      fetched: {
+        pdfExists: true,
+        pageImages: ["pages/page-001.png"]
+      },
+      folders: mockFolders()
+    });
+
+    expect(openRouterVisionClient.parsePageImage).toHaveBeenCalledTimes(1);
+    expect(result.usedOcr).toBe(true);
+    expect(result.provider).toBe("qwen_vl");
+  });
+
+  it("does not call Qwen-VL when RECAP plain text is usable", async () => {
+    const openRouterVisionClient = {
+      parsePageImage: vi.fn()
+    };
+
+    const agent = createDocumentVisionParserAgent({
+      openRouterVisionClient,
+      config: {
+        openRouterApiKey: "test",
+        qwenVlModel: "qwen/qwen3-vl-8b-instruct"
+      }
+    });
+
+    const result = await agent.run({
+      triage: {
+        requiresOcr: false,
+        reason: "plain_text_usable"
+      },
+      fetched: {
+        plainText: "Usable RECAP text ".repeat(500),
+        plainTextExists: true
+      },
+      folders: mockFolders()
+    });
+
+    expect(openRouterVisionClient.parsePageImage).not.toHaveBeenCalled();
+    expect(result.usedOcr).toBe(false);
+  });
+
+  it("marks bboxAvailable=false when model does not return coordinates", async () => {
+    const agent = createDocumentVisionParserAgent({
+      openRouterVisionClient: mockQwenVlClientWithoutBboxes(),
+      config: {
+        openRouterApiKey: "test",
+        qwenVlModel: "qwen/qwen3-vl-8b-instruct"
+      }
+    });
+
+    const result = await agent.run(mockOcrRequiredInput());
+
+    expect(result.bboxAvailable).toBe(false);
+    expect(result.coordinateReviewPrecision).toBe("page_level_only");
+  });
+
+  it("creates page-level signature flag from Qwen-VL response", async () => {
+    const agent = createDocumentVisionParserAgent({
+      openRouterVisionClient: mockQwenVlClient({
+        reviewFlags: [
+          {
+            flagType: "signature_possible",
+            severity: "medium",
+            page: 2,
+            reason: "Likely signature block detected.",
+            confidence: 0.81,
+            bboxAvailable: false,
+            bbox: null
+          }
+        ]
+      }),
+      config: {
+        openRouterApiKey: "test",
+        qwenVlModel: "qwen/qwen3-vl-8b-instruct"
+      }
+    });
+
+    const result = await agent.run(mockOcrRequiredInput());
+
+    expect(result.reviewFlags).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          flagType: "signature_possible",
+          page: 2,
+          bboxAvailable: false
+        })
+      ])
+    );
+  });
+
+  it("fails clearly on OpenRouter error without fallback model", async () => {
+    const openRouterVisionClient = {
+      parsePageImage: vi.fn().mockRejectedValue(new Error("OpenRouter failed"))
+    };
+
+    const agent = createDocumentVisionParserAgent({
+      openRouterVisionClient,
+      config: {
+        openRouterApiKey: "test",
+        qwenVlModel: "qwen/qwen3-vl-8b-instruct"
+      }
+    });
+
+    await expect(agent.run(mockOcrRequiredInput()))
+      .rejects
+      .toThrow(/OpenRouter failed/i);
+
+    expect(openRouterVisionClient.parsePageImage).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
 ## reviewFlag.agent.test.js
 
 ```js
 describe("ReviewFlagAgent", () => {
-  it("flags low-confidence OCR boxes", async () => {
-    const agent = createReviewFlagAgent();
-
-    const result = await agent.run({
-      parsed: {
-        pages: [
-          {
-            page: 1,
-            boxes: [
-              {
-                text: "garbled",
-                confidence: 0.31,
-                bbox: { x: 10, y: 20, w: 100, h: 40 }
-              }
-            ]
-          }
-        ]
-      },
-      metadata: {}
-    });
-
-    expect(result.reviewRequired).toBe(true);
-    expect(result.flags[0].flagType).toBe("low_confidence_ocr");
-    expect(result.flags[0].bbox).toEqual({ x: 10, y: 20, w: 100, h: 40 });
-  });
-
-  it("flags possible signature blocks", async () => {
+  it("flags possible signature blocks as page-level Qwen-VL flags", async () => {
     const agent = createReviewFlagAgent();
 
     const result = await agent.run({
@@ -2136,13 +3120,16 @@ describe("ReviewFlagAgent", () => {
             page: 3,
             text: "Respectfully submitted,\n/s/ John Smith\nAttorney for Defendant"
           }
-        ]
+        ],
+        provider: "qwen_vl",
+        bboxAvailable: false
       },
       metadata: {}
     });
 
     expect(result.reviewRequired).toBe(true);
     expect(result.flags.some(f => f.flagType === "signature_possible")).toBe(true);
+    expect(result.flags[0].bboxAvailable).toBe(false);
   });
 });
 ```
@@ -2151,9 +3138,32 @@ describe("ReviewFlagAgent", () => {
 
 ```js
 describe("LegalExtractionAgent", () => {
+  it("requires OpenRouter API key", async () => {
+    const agent = createLegalExtractionAgent({
+      openRouterTextClient: mockOpenRouterTextClient(),
+      config: {
+        openRouterApiKey: "",
+        legalExtractionModel: "qwen/qwen3.6-35b-a3b-instruct"
+      }
+    });
+
+    await expect(
+      agent.run({
+        parsed: { text: "Plaintiff moves to compel." },
+        annotations: { annotations: [] },
+        metadata: {},
+        review: { reviewRequired: false, flags: [] }
+      })
+    ).rejects.toThrow(/OPENROUTER_API_KEY/i);
+  });
+
   it("returns strict legal extraction JSON", async () => {
     const agent = createLegalExtractionAgent({
-      model: mockStrictJsonModel()
+      openRouterTextClient: mockStrictJsonTextClient(),
+      config: {
+        openRouterApiKey: "test",
+        legalExtractionModel: "qwen/qwen3.6-35b-a3b-instruct"
+      }
     });
 
     const result = await agent.run({
@@ -2180,6 +3190,57 @@ describe("LegalExtractionAgent", () => {
     expect(Array.isArray(result.legalTerms)).toBe(true);
     expect(result.confidence).toBeDefined();
   });
+
+  it("fails clearly on model error without fallback model", async () => {
+    const openRouterTextClient = {
+      extractLegalJson: vi.fn().mockRejectedValue(new Error("model failed"))
+    };
+
+    const agent = createLegalExtractionAgent({
+      openRouterTextClient,
+      config: {
+        openRouterApiKey: "test",
+        legalExtractionModel: "qwen/qwen3.6-35b-a3b-instruct"
+      }
+    });
+
+    await expect(
+      agent.run({
+        parsed: { text: "Plaintiff moves to compel." },
+        annotations: { annotations: [] },
+        metadata: {},
+        review: { reviewRequired: false, flags: [] }
+      })
+    ).rejects.toThrow(/model failed/i);
+
+    expect(openRouterTextClient.extractLegalJson).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+## frontend test skeleton
+
+```js
+describe("RECAP Import frontend", () => {
+  it("renders simple operator console only", () => {
+    render(<RecapImportPage />);
+
+    expect(screen.getByText(/RECAP Import Console/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Search terms/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Target count/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/OCR mode/i)).toBeInTheDocument();
+    expect(screen.getByText(/Start Import Job/i)).toBeInTheDocument();
+  });
+
+  it("does not render internal backend artifact names", () => {
+    render(<RecapImportPage />);
+
+    expect(screen.queryByText(/source\.pdf/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/parsed\.md/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/layout_boxes\.json/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/extracted_legal\.json/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/prompt_eval_versions\.json/i)).not.toBeInTheDocument();
+  });
 });
 ```
 
@@ -2188,41 +3249,50 @@ describe("LegalExtractionAgent", () => {
 ---
 
 <details>
-<summary>15. Implementation Plan</summary>
+<summary>16. Implementation Plan</summary>
 
 ## Phase 1: Red tests and contracts
 
 1. Add route tests.
 2. Add agent contract tests.
 3. Add queue tests.
-4. Add OCR triage tests.
-5. Add frontend-safe response test.
-6. Confirm tests fail.
+4. Add text triage tests.
+5. Add Qwen-VL parser tests.
+6. Add frontend-safe response test.
+7. Confirm tests fail.
 
-## Phase 2: Backend route + job creation
+## Phase 2: Config and guardrails
+
+1. Add minimal `.env.example`.
+2. Add config service.
+3. Validate required credentials.
+4. Hard-disable PACER purchase and RECAP Fetch.
+5. Reject runtime fixture/fallback mode.
+
+## Phase 3: Backend route + job creation
 
 1. Implement routes.
 2. Implement validation.
-3. Implement job repository.
-4. Implement task repository.
+3. Implement local job repository.
+4. Implement local task repository.
 5. Return job id.
 
-## Phase 3: Search + queue
+## Phase 4: CourtListener search + queue
 
-1. Implement CourtListener client interface.
-2. Mock CourtListener in tests.
+1. Implement CourtListener client.
+2. Implement token auth.
 3. Implement search agent.
 4. Implement queue agent.
 5. Enforce concurrency 1.
 
-## Phase 4: Folder + metadata
+## Phase 5: Folder + metadata
 
 1. Implement metadata agent.
 2. Implement folder agent.
 3. Write source metadata.
 4. Write initial manifests.
 
-## Phase 5: Fetch + triage
+## Phase 6: Fetch + triage
 
 1. Implement fetch agent.
 2. Save plain text.
@@ -2230,60 +3300,67 @@ describe("LegalExtractionAgent", () => {
 4. Implement text triage.
 5. Add OCR decision artifacts.
 
-## Phase 6: OCR adapter
+## Phase 7: Qwen-VL parser
 
-1. Implement OCR agent interface.
-2. Mock OCR in tests.
-3. Add PaddleOCR runtime adapter.
+1. Implement OpenRouter vision client.
+2. Implement PDF-to-image utility.
+3. Implement document vision parser agent.
 4. Save parsed outputs.
+5. Save page-level review flags.
+6. No fallback model.
 
-## Phase 7: Review + extraction
+## Phase 8: Review + extraction
 
 1. Implement review flag agent.
 2. Implement legal annotation agent.
-3. Implement legal extraction agent.
-4. Save strict JSON.
+3. Implement OpenRouter text client.
+4. Implement legal extraction agent.
+5. Save strict JSON.
 
-## Phase 8: Manifest + eval metadata
+## Phase 9: Manifest + eval metadata
 
 1. Implement manifest agent.
 2. Save prompt/eval/schema versions.
 3. Save run traces.
 
-## Phase 9: Frontend
+## Phase 10: Frontend
 
 1. Create `/recap-import`.
-2. Add form.
+2. Add simple form.
 3. Add job polling.
 4. Show folder path only.
 5. Hide internals.
 
-## Phase 10: Integration eval
+## Phase 11: Integration test
 
-1. Mock 3-document job.
-2. Mock 100-document queue.
-3. Confirm sequential processing.
-4. Confirm folder outputs.
-5. Confirm frontend-safe response.
+1. Mock 3-document CourtListener job.
+2. Mock Qwen-VL parser response.
+3. Mock legal extraction response.
+4. Process queue sequentially.
+5. Confirm folder outputs.
+6. Confirm frontend-safe response.
 
 </details>
 
 ---
 
 <details>
-<summary>16. Acceptance Criteria</summary>
+<summary>17. Acceptance Criteria</summary>
 
 ## Functional
 
 - User can submit RECAP search terms.
 - User can choose target count up to 100.
+- Backend uses real CourtListener API.
+- Backend requires CourtListener token.
+- Backend requires OpenRouter API key.
 - Backend creates import job.
 - Backend creates document tasks.
 - Queue processes one document at a time.
-- Documents are filed into case folders.
+- Documents are filed into local case folders.
 - Each document has metadata.
 - Existing RECAP text is used when available.
-- OCR runs only when required or forced.
+- Qwen-VL runs only when required or forced.
 - Review flags are saved.
 - Legal annotations are saved.
 - Legal extraction JSON is saved.
@@ -2327,11 +3404,14 @@ folder naming tests
 metadata tests
 fetch tests
 triage tests
+Qwen-VL parser tests
+OpenRouter client tests
 review flag tests
 annotation tests
 extraction schema tests
 manifest tests
-integration test with mocked RECAP + mocked OCR + mocked model
+frontend tests
+integration test with mocked CourtListener + mocked OpenRouter clients
 ```
 
 </details>
@@ -2339,7 +3419,7 @@ integration test with mocked RECAP + mocked OCR + mocked model
 ---
 
 <details>
-<summary>17. Final Guardrails for Codex</summary>
+<summary>18. Final Guardrails for Codex/OpenCode</summary>
 
 Do:
 
@@ -2355,6 +3435,10 @@ save prompt/eval/schema versions
 annotate aggressively in backend artifacts
 mark uncertainty honestly
 return only folder paths to frontend
+save all files locally in repo
+use CourtListener API token
+use OpenRouter API key
+use Qwen-VL as MVP parser
 ```
 
 Do not:
@@ -2363,6 +3447,9 @@ Do not:
 build a browser crawler
 use RECAP extension
 buy PACER documents
+use RECAP Fetch
+use Supabase
+use remote storage
 show backend internals in frontend
 turn agents into autonomous chatbots
 skip tests
@@ -2370,6 +3457,9 @@ skip manifests
 force OCR on every document by default
 invent legal facts
 hide source uncertainty
+use runtime fixtures
+use fallback models
+silently fake API results
 ```
 
 Core principle:
@@ -2380,7 +3470,7 @@ The backend agents are the workers.
 The queue controls execution.
 The folder is the product.
 The manifests make it trustworthy.
-The evals keep it from drifting.
+The tests/evals keep it from drifting.
 ```
 
 </details>
