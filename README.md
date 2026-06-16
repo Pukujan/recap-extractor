@@ -24,8 +24,8 @@ npm start
 One command starts the server, creates a job, processes all matching RECAP documents, and prints extraction sources:
 
 ```bash
-./bin/run-pipeline                    # "motion to compel", 10 docs
-./bin/run-pipeline "discovery" 3      # custom search, 3 docs
+npm run recap-pipeline                    # "motion to compel", 10 docs
+npm run recap-pipeline -- "discovery" 3   # custom search, 3 docs
 ```
 
 Output shows each document's **extraction source**:

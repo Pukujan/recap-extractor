@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node backend/src/server.js"
+    "start": "node backend/src/server.js",
+    "recap-pipeline": "./bin/run-pipeline"
   },
   "keywords": [],
   "author": "",
