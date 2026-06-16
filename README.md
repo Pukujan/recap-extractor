@@ -5,18 +5,10 @@ Local pipeline that searches CourtListener/RECAP for legal documents, downloads 
 ## Quick Start
 
 ```bash
-# 1. Install
+cp .env.example .env            # add OPENROUTER_API_KEY
 npm install
-
-# 2. Set up credentials
-cp .env.example .env
-# Edit .env: add your CourtListener API token and OpenRouter API key
-
-# 3. Run tests
-npm test
-
-# 4. Start the API server
-npm start
+npx playwright install chromium
+npm run crawler
 ```
 
 ## Commands
