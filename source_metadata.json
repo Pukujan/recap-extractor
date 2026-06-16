@@ -1,0 +1,46 @@
+{
+  "source": "courtlistener",
+  "caseName": null,
+  "caseNameFull": null,
+  "courtId": null,
+  "docketId": "71027850",
+  "docketNumber": null,
+  "docketEntryId": "433729638",
+  "recapDocumentId": "448091349",
+  "documentNumber": "1",
+  "attachmentNumber": null,
+  "description": "Non-individual Chapter 11 Voluntary Petition. Fee Amount $1738 SubChapter V Filed by Asset Discovery Chapter 11 Plan Small Business Subchapter V Due by 11/3/2025. (Ecker, C.)",
+  "dateFiled": "2025-08-05",
+  "absoluteUrl": "/docket/71027850/1/asset-discovery/",
+  "plainText": null,
+  "plainTextAvailable": false,
+  "pdfUrl": "https://storage.courtlistener.com/recap/gov.uscourts.txnb.531101/gov.uscourts.txnb.531101.1.0.pdf",
+  "pdfAvailable": true,
+  "ocrStatus": null,
+  "raw": {
+    "absolute_url": "/docket/71027850/1/asset-discovery/",
+    "attachment_number": null,
+    "cites": [],
+    "description": "Non-individual Chapter 11 Voluntary Petition. Fee Amount $1738 SubChapter V Filed by Asset Discovery Chapter 11 Plan Small Business Subchapter V Due by 11/3/2025. (Ecker, C.)",
+    "docket_entry_id": 433729638,
+    "docket_id": 71027850,
+    "document_number": 1,
+    "document_type": "PACER Document",
+    "entry_date_filed": "2025-08-05",
+    "entry_number": 1,
+    "filepath_local": "recap/gov.uscourts.txnb.531101/gov.uscourts.txnb.531101.1.0.pdf",
+    "id": 448091349,
+    "is_available": true,
+    "meta": {
+      "timestamp": "2025-08-05T15:54:11.184337Z",
+      "date_created": "2025-08-05T14:34:29.794196Z",
+      "score": {
+        "bm25": 104.58995
+      }
+    },
+    "pacer_doc_id": "176050843039",
+    "page_count": 5,
+    "short_description": "Voluntary petition (chapter 11)",
+    "snippet": "Case 25-32986-mvl11 Doci1 Filed 08/05/25 Entered 08/05/25 09:10:06 Desc Main\nDocument Pagelof5 FILED\n\nMUM lM nlcereuirlecelp mem Col-Tiliiham item: tt-m\n\nUnited States Bankruptcy Court for the: 2025\nCLERK, U.S. BANKRUPTCY\n, COURT\nNi\nDistrict of ORTHERN DISTRICT OF Texas\n(State)\nCase number (if known): Chapter\n\nL) Check if this is an\naE ea *, = mang amended filing\n\nOfficial Form 201\nVoluntary Petition for Non-Individuals Filing for Bankruptcy 06/22\n\nIf more space is needed, attach a separate shee"
+  }
+}

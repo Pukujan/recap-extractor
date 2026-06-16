@@ -1,5 +1,5 @@
 export class FetchAgent {
-  constructor({ fileStore, hashService, fetchImpl }) {
+  constructor({ fileStore, hashService, fetchImpl = globalThis.fetch }) {
     this.fileStore = fileStore;
     this.hashService = hashService;
     this.fetchImpl = fetchImpl;
@@ -36,6 +36,7 @@ export class FetchAgent {
     const sourceUnavailable = !plainTextExists && !pdfExists;
 
     return {
+      plainText: metadata.plainText || null,
       plainTextPath,
       pdfPath,
       pdfExists,

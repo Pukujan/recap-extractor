@@ -32,22 +32,32 @@ export class RecapImportService {
     const task = await this.queueAgent.claimNext(jobId);
     if (!task) return null;
 
-    try {
-      const metadata = await this.metadataAgent.run(task);
+    let metadata = null;
+    let folders = null;
 
-      const folders = await this.caseFolderAgent.run({ task, metadata });
+    try {
+      metadata = await this.metadataAgent.run(task);
+
+      folders = await this.caseFolderAgent.run({ task, metadata });
+      if (!folders || !folders.documentFolderPath) {
+        throw new Error(`caseFolderAgent returned invalid folders: ${JSON.stringify(folders)}`);
+      }
 
       const fetchResult = await this.fetchAgent.run({ task, metadata, folders });
 
-      const triageResult = await this.textTriageAgent.run({ task, metadata, fetchResult });
+      const triageResult = await this.textTriageAgent.run({
+        ...fetchResult,
+        pageCount: metadata.pageCount || null,
+        ocrStatus: metadata.ocrStatus || null,
+      });
 
-      const visionResult = await this.documentVisionParserAgent.run({ task, triageResult, fetchResult });
+      const visionResult = await this.documentVisionParserAgent.run({ triage: triageResult, fetched: fetchResult, folders });
 
-      const flags = await this.reviewFlagAgent.run({ task, metadata, visionResult });
+      const flags = await this.reviewFlagAgent.run({ parsed: visionResult, metadata });
 
-      const annotations = await this.legalAnnotationAgent.run({ task, metadata, visionResult });
+      const annotations = await this.legalAnnotationAgent.run({ parsed: visionResult, metadata, review: flags, folders });
 
-      const extraction = await this.legalExtractionAgent.run({ task, metadata, annotations, visionResult });
+      const extraction = await this.legalExtractionAgent.run({ parsed: visionResult, annotations, metadata, review: flags, folders });
 
       await this.manifestAgent.run({
         task,
@@ -69,7 +79,11 @@ export class RecapImportService {
     } catch (error) {
       await this.queueAgent.markFailed(task.id, error);
 
-      await this.manifestAgent.runError({ task, error });
+      try {
+        await this.manifestAgent.runError({ task, error, folders });
+      } catch (manifestError) {
+        console.error('manifestAgent.runError also failed:', manifestError.message);
+      }
 
       throw error;
     }

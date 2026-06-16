@@ -56,6 +56,8 @@ export class ManifestAgent {
   }
 
   async runError({ task, error, folders }) {
+    const docPath = folders ? `${folders.documentFolderPath}` : null;
+
     const manifest = {
       jobId: task.jobId,
       taskId: task.id,
@@ -64,9 +66,7 @@ export class ManifestAgent {
         message: error.message,
         stack: error.stack || null,
       },
-      folders: {
-        documentFolderPath: folders.documentFolderPath,
-      },
+      folders: docPath ? { documentFolderPath: docPath } : null,
       versions: {
         promptVersion: PROMPT_VERSION,
         schemaVersion: SCHEMA_VERSION,
@@ -77,15 +77,17 @@ export class ManifestAgent {
       },
     };
 
-    const manifestPath = `${folders.documentFolderPath}manifest/document_manifest.json`;
-    await this.writer.writeJson(manifestPath, manifest);
+    if (docPath) {
+      const manifestPath = `${docPath}manifest/document_manifest.json`;
+      await this.writer.writeJson(manifestPath, manifest);
 
-    const promptVersionsPath = `${folders.documentFolderPath}manifest/prompt_eval_versions.json`;
-    await this.writer.writeJson(promptVersionsPath, {
-      promptVersion: PROMPT_VERSION,
-      schemaVersion: SCHEMA_VERSION,
-      evalVersion: EVAL_VERSION,
-    });
+      const promptVersionsPath = `${docPath}manifest/prompt_eval_versions.json`;
+      await this.writer.writeJson(promptVersionsPath, {
+        promptVersion: PROMPT_VERSION,
+        schemaVersion: SCHEMA_VERSION,
+        evalVersion: EVAL_VERSION,
+      });
+    }
 
     return manifest;
   }

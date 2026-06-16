@@ -5,7 +5,7 @@ export function createRecapImportRouter(controller) {
 
   router.post("/jobs", (req, res) => controller.createJob(req, res));
   router.get("/jobs/:jobId", (req, res) => controller.getJobStatus(req, res));
-  router.post("/:jobId/process", (req, res) => controller.processNext(req, res));
+  router.post("/jobs/:jobId/process", (req, res) => controller.processNext(req, res));
 
   return router;
 }

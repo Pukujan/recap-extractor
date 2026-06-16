@@ -48,6 +48,7 @@ export class RecapImportController {
         queueConcurrency: 1,
       });
     } catch (error) {
+      console.error('createJob error:', error);
       return res.status(500).json({ error: error.message });
     }
   }
@@ -82,6 +83,7 @@ export class RecapImportController {
       const result = await this.recapImportService.processNextDocument(jobId);
       return res.json(result);
     } catch (error) {
+      console.error('processNext error:', error);
       return res.status(500).json({ error: error.message });
     }
   }

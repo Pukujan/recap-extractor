@@ -7,9 +7,11 @@ export class CaseFolderAgent {
   }
 
   async run({ metadata, task }) {
-    const caseSlug = slugifyForPath(metadata.caseName);
-    const safeCourtId = (metadata.courtId || '').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
-    const caseFolderName = `${caseSlug}__${safeCourtId}__docket-${metadata.docketId}`;
+    const caseName = metadata.caseName || `doc-${metadata.recapDocumentId || 'unknown'}`;
+    const caseSlug = slugifyForPath(caseName);
+    const safeCourtId = (metadata.courtId || 'unknown').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
+    const docketId = metadata.docketId || metadata.recapDocumentId || 'unknown';
+    const caseFolderName = `${caseSlug}__${safeCourtId}__docket-${docketId}`;
 
     let caseFolderPath = `${this.outputRoot}/${caseFolderName}/`;
     let counter = 1;

@@ -8,21 +8,20 @@ export class RecapSearchAgent {
 
   _normalize(raw) {
     const de = raw.docket_entry || {};
-    const docket = de.docket || {};
 
     return {
       recapDocumentId: raw.id != null ? String(raw.id) : null,
       docketEntryId: raw.docket_entry_id != null ? String(raw.docket_entry_id) : (de.id != null ? String(de.id) : null),
       absoluteUrl: raw.absolute_url || null,
-      caseName: docket.case_name || null,
-      caseNameFull: docket.case_name_full || docket.case_name || null,
-      courtId: docket.court || docket.court_id || null,
-      docketId: docket.id != null ? String(docket.id) : null,
-      docketNumber: docket.docket_number || null,
+      caseName: raw.case_name || de.case_name || (de.docket && de.docket.case_name) || null,
+      caseNameFull: raw.case_name_full || de.case_name_full || (de.docket && de.docket.case_name_full) || null,
+      courtId: raw.court || de.court || (de.docket && (de.docket.court || de.docket.court_id)) || null,
+      docketId: raw.docket_id != null ? String(raw.docket_id) : (de.docket_id != null ? String(de.docket_id) : (de.docket && de.docket.id != null ? String(de.docket.id) : null)),
+      docketNumber: raw.docket_number || (de.docket && de.docket.docket_number) || null,
       documentNumber: raw.document_number != null ? String(raw.document_number) : null,
       attachmentNumber: raw.attachment_number != null ? String(raw.attachment_number) : null,
-      description: raw.description || null,
-      dateFiled: raw.date_filed || null,
+      description: raw.description || raw.short_description || null,
+      dateFiled: raw.date_filed || raw.entry_date_filed || null,
       pdfAvailable: !!(raw.filepath_local),
       plainTextAvailable: !!raw.plain_text,
       plainText: raw.plain_text || null,
