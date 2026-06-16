@@ -8,7 +8,7 @@
     "test:watch": "vitest",
     "start": "node backend/src/server.js",
     "recap-pipeline": "./bin/run-pipeline",
-    "demo:crawl-courtlistener": "node scripts/demo-crawl-courtlistener.js"
+    "crawler": "node scripts/demo-crawl-courtlistener.js"
   },
   "keywords": [],
   "author": "",
