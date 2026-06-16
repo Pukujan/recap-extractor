@@ -23,7 +23,10 @@ async function main() {
   console.log(`[crawler-demo] Starting crawl: query="${options.query || options.url}" maxPages=${options.maxPages}`);
 
   const { chromium } = await import('playwright');
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
+  });
 
   const fs = await import('fs/promises');
   const path = await import('path');

@@ -9,6 +9,8 @@ describe("playwrightCrawlerDemo.service", () => {
     });
 
     const page = {
+      setViewportSize: vi.fn().mockResolvedValue(undefined),
+      setUserAgent: vi.fn().mockResolvedValue(undefined),
       goto,
       title: vi.fn().mockResolvedValue("Search"),
       content: vi.fn().mockResolvedValue("<html><a href='/recap/'>RECAP</a></html>"),
@@ -38,6 +40,8 @@ describe("playwrightCrawlerDemo.service", () => {
 
   it("waits between page visits", async () => {
     const page = {
+      setViewportSize: vi.fn().mockResolvedValue(undefined),
+      setUserAgent: vi.fn().mockResolvedValue(undefined),
       goto: vi.fn().mockResolvedValue({
         status: () => 200,
         url: () => "https://www.courtlistener.com/"
@@ -67,6 +71,8 @@ describe("playwrightCrawlerDemo.service", () => {
 
   it("stops on 429 and records stoppedReason", async () => {
     const page = {
+      setViewportSize: vi.fn().mockResolvedValue(undefined),
+      setUserAgent: vi.fn().mockResolvedValue(undefined),
       goto: vi.fn().mockResolvedValue({
         status: () => 429,
         url: () => "https://www.courtlistener.com/search/"
@@ -97,6 +103,8 @@ describe("playwrightCrawlerDemo.service", () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
 
     const page = {
+      setViewportSize: vi.fn().mockResolvedValue(undefined),
+      setUserAgent: vi.fn().mockResolvedValue(undefined),
       goto: vi.fn().mockResolvedValue({
         status: () => 200,
         url: () => "https://www.courtlistener.com/"
@@ -136,6 +144,8 @@ describe("playwrightCrawlerDemo.service", () => {
     };
 
     const page = {
+      setViewportSize: vi.fn().mockResolvedValue(undefined),
+      setUserAgent: vi.fn().mockResolvedValue(undefined),
       goto: vi.fn().mockResolvedValue({
         status: () => 200,
         url: () => "https://www.courtlistener.com/"

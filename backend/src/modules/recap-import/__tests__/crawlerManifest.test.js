@@ -15,7 +15,7 @@ describe("crawlerManifest", () => {
     expect(manifest.stealthUsed).toBe(false);
     expect(manifest.proxyRotationUsed).toBe(false);
     expect(manifest.concurrency).toBe(1);
-    expect(manifest.hardMaxPages).toBe(10);
+    expect(manifest.hardMaxPages).toBe(20);
   });
 
   it("records stoppedReason when crawler is blocked", () => {

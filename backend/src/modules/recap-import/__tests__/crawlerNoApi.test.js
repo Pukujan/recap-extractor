@@ -10,6 +10,8 @@ describe("crawler demo no API behavior", () => {
     };
 
     const page = {
+      setViewportSize: vi.fn().mockResolvedValue(undefined),
+      setUserAgent: vi.fn().mockResolvedValue(undefined),
       goto: vi.fn().mockResolvedValue({
         status: () => 200,
         url: () => "https://www.courtlistener.com/"
