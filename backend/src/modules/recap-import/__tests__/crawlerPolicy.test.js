@@ -21,7 +21,7 @@ describe("crawlerPolicy", () => {
       query: "motion to compel"
     });
 
-    expect(options.maxPages).toBe(5);
+    expect(options.maxPages).toBe(20);
     expect(options.concurrency).toBe(1);
     expect(options.downloadPdfs).toBe(false);
     expect(options.loginAllowed).toBe(false);

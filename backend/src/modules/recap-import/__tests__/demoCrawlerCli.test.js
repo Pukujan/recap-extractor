@@ -5,7 +5,7 @@ describe("demo crawler CLI", () => {
   it("defaults to motion to compel query when no args provided", () => {
     const args = parseCrawlerCliArgs([]);
     expect(args.query).toBe('motion to compel');
-    expect(args.maxPages).toBe(3);
+    expect(args.maxPages).toBe(20);
   });
 
   it("parses query and maxPages", () => {

@@ -1,6 +1,6 @@
 const DEFAULT_POLICY = {
-  maxPagesDefault: 5,
-  maxPagesHardLimit: 10,
+  maxPagesDefault: 20,
+  maxPagesHardLimit: 20,
   concurrency: 1,
   delayMsMin: 10000,
   delayMsMax: 20000,

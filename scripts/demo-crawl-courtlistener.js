@@ -10,7 +10,7 @@ export function parseCrawlerCliArgs(argv) {
 
   if (!args.query && !args.url) {
     args.query = 'motion to compel';
-    args.maxPages = args.maxPages || 3;
+    args.maxPages = args.maxPages || 20;
   }
 
   const options = validateCrawlerOptions(args);
