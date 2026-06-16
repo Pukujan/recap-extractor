@@ -1,6 +1,11 @@
+function envInt(key, fallback) {
+  const val = typeof process !== 'undefined' ? process.env[key] : undefined;
+  return val ? parseInt(val, 10) : fallback;
+}
+
 const DEFAULT_POLICY = {
-  maxPagesDefault: 20,
-  maxPagesHardLimit: 20,
+  maxPagesDefault: envInt('CRAWLER_MAX_PAGES', 20),
+  maxPagesHardLimit: envInt('CRAWLER_MAX_PAGES', 20),
   concurrency: 1,
   delayMsMin: 10000,
   delayMsMax: 20000,
@@ -15,6 +20,7 @@ const BLOCKED_PATTERNS = [
   { pattern: /access denied/i, reason: 'ACCESS_DENIED' },
   { pattern: /too many requests/i, reason: 'RATE_LIMITED' },
   { pattern: /Terms of Service/i, reason: 'TERMS_WARNING' },
+  { pattern: /sign in to continue/i, reason: 'LOGIN_WALL' },
 ];
 
 const LOGIN_TITLE_PATTERNS = [

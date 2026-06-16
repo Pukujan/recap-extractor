@@ -3,9 +3,13 @@ import { parseCrawlerCliArgs } from "../../../../../scripts/demo-crawl-courtlist
 
 describe("demo crawler CLI", () => {
   it("defaults to motion to compel query when no args provided", () => {
+    const prev = process.env.CRAWLER_DEFAULT_QUERY;
+    process.env.CRAWLER_DEFAULT_QUERY = 'motion to compel';
+    process.env.CRAWLER_MAX_PAGES = '20';
     const args = parseCrawlerCliArgs([]);
     expect(args.query).toBe('motion to compel');
     expect(args.maxPages).toBe(20);
+    process.env.CRAWLER_DEFAULT_QUERY = prev;
   });
 
   it("parses query and maxPages", () => {

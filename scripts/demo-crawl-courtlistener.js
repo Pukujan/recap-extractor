@@ -9,8 +9,8 @@ export function parseCrawlerCliArgs(argv) {
   }
 
   if (!args.query && !args.url) {
-    args.query = 'motion to compel';
-    args.maxPages = args.maxPages || 20;
+    args.query = process.env.CRAWLER_DEFAULT_QUERY || 'motion to compel';
+    args.maxPages = args.maxPages || parseInt(process.env.CRAWLER_MAX_PAGES || '20', 10);
   }
 
   const options = validateCrawlerOptions(args);
