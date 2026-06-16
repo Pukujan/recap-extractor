@@ -9,7 +9,8 @@ export function parseCrawlerCliArgs(argv) {
   }
 
   if (!args.query && !args.url) {
-    throw new Error('Either --query or --url is required.');
+    args.query = 'motion to compel';
+    args.maxPages = args.maxPages || 3;
   }
 
   const options = validateCrawlerOptions(args);

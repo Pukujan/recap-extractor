@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import { parseCrawlerCliArgs } from "../../../../../scripts/demo-crawl-courtlistener.js";
 
 describe("demo crawler CLI", () => {
-  it("requires either query or url", () => {
-    expect(() => parseCrawlerCliArgs([])).toThrow(/query or --url/i);
+  it("defaults to motion to compel query when no args provided", () => {
+    const args = parseCrawlerCliArgs([]);
+    expect(args.query).toBe('motion to compel');
+    expect(args.maxPages).toBe(3);
   });
 
   it("parses query and maxPages", () => {
