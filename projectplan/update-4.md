@@ -981,3 +981,455 @@ Done only when:
 ## Current Working Note
 
 This is a showcase crawler, not a production data acquisition path. It proves browser crawling and public-page parsing capability while keeping the real extraction product grounded in API, local cache, and explicit document-body source tracking.
+
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+mkdir -p backend/src/modules/recap-import/__tests__
+
+cat > backend/src/modules/recap-import/__tests__/crawlerPolicy.test.js <<'EOF'
+import { describe, it, expect } from "vitest";
+import {
+  validateCrawlerOptions,
+  getRandomDelayMs,
+  shouldStopForResponse,
+  detectBlockedPageText
+} from "../crawler-demo/crawlerPolicy.js";
+
+describe("crawlerPolicy", () => {
+  it("refuses maxPages above hard limit", () => {
+    expect(() =>
+      validateCrawlerOptions({
+        query: "motion to compel",
+        maxPages: 100
+      })
+    ).toThrow(/hard limit/i);
+  });
+
+  it("defaults to bounded demo settings", () => {
+    const options = validateCrawlerOptions({
+      query: "motion to compel"
+    });
+
+    expect(options.maxPages).toBe(5);
+    expect(options.concurrency).toBe(1);
+    expect(options.downloadPdfs).toBe(false);
+    expect(options.loginAllowed).toBe(false);
+    expect(options.stealthAllowed).toBe(false);
+    expect(options.proxyRotationAllowed).toBe(false);
+  });
+
+  it("rejects PDF downloading in crawler demo mode", () => {
+    expect(() =>
+      validateCrawlerOptions({
+        query: "motion to compel",
+        downloadPdfs: true
+      })
+    ).toThrow(/pdf download/i);
+  });
+
+  it("generates polite delay between page visits", () => {
+    const delay = getRandomDelayMs({
+      min: 10000,
+      max: 20000,
+      random: () => 0.5
+    });
+
+    expect(delay).toBeGreaterThanOrEqual(10000);
+    expect(delay).toBeLessThanOrEqual(20000);
+  });
+
+  it("stops immediately on HTTP 429", () => {
+    const response = {
+      status: () => 429,
+      url: () => "https://www.courtlistener.com/search/"
+    };
+
+    const result = shouldStopForResponse(response);
+
+    expect(result.stop).toBe(true);
+    expect(result.reason).toBe("HTTP_429");
+  });
+
+  it("stops immediately on HTTP 403", () => {
+    const response = {
+      status: () => 403,
+      url: () => "https://www.courtlistener.com/search/"
+    };
+
+    const result = shouldStopForResponse(response);
+
+    expect(result.stop).toBe(true);
+    expect(result.reason).toBe("HTTP_403");
+  });
+
+  it("detects captcha and blocked-page text", () => {
+    expect(detectBlockedPageText("Please complete the CAPTCHA")).toMatchObject({
+      blocked: true,
+      reason: "CAPTCHA"
+    });
+
+    expect(detectBlockedPageText("Access denied")).toMatchObject({
+      blocked: true
+    });
+
+    expect(detectBlockedPageText("Sign in to continue")).toMatchObject({
+      blocked: true
+    });
+  });
+});
+EOF
+
+cat > backend/src/modules/recap-import/__tests__/crawlerNoApi.test.js <<'EOF'
+import { describe, it, expect, vi } from "vitest";
+import { runCourtListenerCrawlerDemo } from "../crawler-demo/playwrightCrawlerDemo.service.js";
+
+describe("crawler demo no API behavior", () => {
+  it("does not call the CourtListener API client", async () => {
+    const courtListenerClient = {
+      search: vi.fn(),
+      searchRecapDocuments: vi.fn(),
+      searchRecapDocumentsByType: vi.fn()
+    };
+
+    const page = {
+      goto: vi.fn().mockResolvedValue({
+        status: () => 200,
+        url: () => "https://www.courtlistener.com/"
+      }),
+      title: vi.fn().mockResolvedValue("CourtListener"),
+      content: vi.fn().mockResolvedValue("<html><title>CourtListener</title></html>"),
+      $$eval: vi.fn().mockResolvedValue([]),
+      close: vi.fn()
+    };
+
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn()
+    };
+
+    await runCourtListenerCrawlerDemo({
+      query: "motion to compel",
+      maxPages: 1,
+      browser,
+      courtListenerClient,
+      delay: vi.fn()
+    });
+
+    expect(courtListenerClient.search).not.toHaveBeenCalled();
+    expect(courtListenerClient.searchRecapDocuments).not.toHaveBeenCalled();
+    expect(courtListenerClient.searchRecapDocumentsByType).not.toHaveBeenCalled();
+  });
+});
+EOF
+
+cat > backend/src/modules/recap-import/__tests__/playwrightCrawlerDemo.service.test.js <<'EOF'
+import { describe, it, expect, vi } from "vitest";
+import { runCourtListenerCrawlerDemo } from "../crawler-demo/playwrightCrawlerDemo.service.js";
+
+describe("playwrightCrawlerDemo.service", () => {
+  it("visits at most maxPages", async () => {
+    const goto = vi.fn().mockResolvedValue({
+      status: () => 200,
+      url: () => "https://www.courtlistener.com/search/"
+    });
+
+    const page = {
+      goto,
+      title: vi.fn().mockResolvedValue("Search"),
+      content: vi.fn().mockResolvedValue("<html><a href='/recap/'>RECAP</a></html>"),
+      $$eval: vi.fn().mockResolvedValue([
+        "https://www.courtlistener.com/recap/1/",
+        "https://www.courtlistener.com/recap/2/",
+        "https://www.courtlistener.com/recap/3/"
+      ]),
+      close: vi.fn()
+    };
+
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn()
+    };
+
+    const result = await runCourtListenerCrawlerDemo({
+      query: "motion to compel",
+      maxPages: 2,
+      browser,
+      delay: vi.fn()
+    });
+
+    expect(goto).toHaveBeenCalledTimes(2);
+    expect(result.manifest.pagesVisited).toBe(2);
+  });
+
+  it("waits between page visits", async () => {
+    const page = {
+      goto: vi.fn().mockResolvedValue({
+        status: () => 200,
+        url: () => "https://www.courtlistener.com/"
+      }),
+      title: vi.fn().mockResolvedValue("CourtListener"),
+      content: vi.fn().mockResolvedValue("<html><a href='/recap/1/'>One</a></html>"),
+      $$eval: vi.fn().mockResolvedValue(["https://www.courtlistener.com/recap/1/"]),
+      close: vi.fn()
+    };
+
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn()
+    };
+
+    const delay = vi.fn().mockResolvedValue(undefined);
+
+    await runCourtListenerCrawlerDemo({
+      query: "motion to compel",
+      maxPages: 2,
+      browser,
+      delay
+    });
+
+    expect(delay).toHaveBeenCalled();
+  });
+
+  it("stops on 429 and records stoppedReason", async () => {
+    const page = {
+      goto: vi.fn().mockResolvedValue({
+        status: () => 429,
+        url: () => "https://www.courtlistener.com/search/"
+      }),
+      title: vi.fn(),
+      content: vi.fn(),
+      $$eval: vi.fn(),
+      close: vi.fn()
+    };
+
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn()
+    };
+
+    const result = await runCourtListenerCrawlerDemo({
+      query: "motion to compel",
+      maxPages: 5,
+      browser,
+      delay: vi.fn()
+    });
+
+    expect(result.manifest.stoppedReason).toBe("HTTP_429");
+    expect(result.manifest.pagesVisited).toBe(0);
+  });
+
+  it("saves HTML for each visited page", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+
+    const page = {
+      goto: vi.fn().mockResolvedValue({
+        status: () => 200,
+        url: () => "https://www.courtlistener.com/"
+      }),
+      title: vi.fn().mockResolvedValue("CourtListener"),
+      content: vi.fn().mockResolvedValue("<html><title>CourtListener</title></html>"),
+      $$eval: vi.fn().mockResolvedValue([]),
+      close: vi.fn()
+    };
+
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn()
+    };
+
+    await runCourtListenerCrawlerDemo({
+      query: "motion to compel",
+      maxPages: 1,
+      browser,
+      delay: vi.fn(),
+      fileStore: {
+        writeFile,
+        writeJson: vi.fn().mockResolvedValue(undefined),
+        ensureDir: vi.fn().mockResolvedValue(undefined)
+      }
+    });
+
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.stringMatching(/page-001\.html$/),
+      expect.stringContaining("<html>")
+    );
+  });
+
+  it("does not download discovered PDF links", async () => {
+    const pdfDownloadService = {
+      download: vi.fn()
+    };
+
+    const page = {
+      goto: vi.fn().mockResolvedValue({
+        status: () => 200,
+        url: () => "https://www.courtlistener.com/"
+      }),
+      title: vi.fn().mockResolvedValue("CourtListener"),
+      content: vi.fn().mockResolvedValue(
+        "<html><a href='https://storage.courtlistener.com/recap/test.pdf'>PDF</a></html>"
+      ),
+      $$eval: vi.fn().mockResolvedValue([
+        "https://storage.courtlistener.com/recap/test.pdf"
+      ]),
+      close: vi.fn()
+    };
+
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn()
+    };
+
+    await runCourtListenerCrawlerDemo({
+      query: "motion to compel",
+      maxPages: 1,
+      browser,
+      delay: vi.fn(),
+      pdfDownloadService
+    });
+
+    expect(pdfDownloadService.download).not.toHaveBeenCalled();
+  });
+});
+EOF
+
+cat > backend/src/modules/recap-import/__tests__/crawlerResultParser.test.js <<'EOF'
+import { describe, it, expect } from "vitest";
+import { parseCrawlerPageResult } from "../crawler-demo/crawlerResultParser.js";
+
+describe("crawlerResultParser", () => {
+  it("extracts title and public links from cached HTML", () => {
+    const result = parseCrawlerPageResult({
+      sourceUrl: "https://www.courtlistener.com/recap/",
+      title: "RECAP Archive",
+      html: `
+        <html>
+          <body>
+            <h1>RECAP Archive</h1>
+            <a href="/recap/123/">Document</a>
+            <a href="https://www.courtlistener.com/docket/456/example/">Docket</a>
+            <a href="https://storage.courtlistener.com/recap/test.pdf">PDF</a>
+            <a href="https://example.com/external">External</a>
+            <a href="mailto:test@example.com">Email</a>
+          </body>
+        </html>
+      `,
+      htmlCachePath: "data/crawler-demo/run/pages/page-001.html"
+    });
+
+    expect(result.title).toBe("RECAP Archive");
+    expect(result.linksDiscovered).toContain("https://www.courtlistener.com/recap/123/");
+    expect(result.linksDiscovered).toContain("https://www.courtlistener.com/docket/456/example/");
+    expect(result.linksDiscovered).not.toContain("https://example.com/external");
+    expect(result.pdfLinksDiscovered).toContain("https://storage.courtlistener.com/recap/test.pdf");
+    expect(result.htmlCachePath).toBe("data/crawler-demo/run/pages/page-001.html");
+    expect(result.crawlMode).toBe("demo_browser_public_pages");
+    expect(result.notForBulkRetrieval).toBe(true);
+  });
+
+  it("extracts simple case metadata when present in page text", () => {
+    const result = parseCrawlerPageResult({
+      sourceUrl: "https://www.courtlistener.com/docket/123/example-v-defendant/",
+      title: "Example v. Defendant",
+      html: `
+        <html>
+          <body>
+            <h1>Example v. Defendant</h1>
+            <p>United States District Court for the Southern District of New York</p>
+            <p>Docket Number: 1:23-cv-00001</p>
+            <p>Motion to Compel Discovery</p>
+          </body>
+        </html>
+      `,
+      htmlCachePath: "data/crawler-demo/run/pages/page-001.html"
+    });
+
+    expect(result.caseName).toBe("Example v. Defendant");
+    expect(result.court).toMatch(/Southern District of New York/);
+    expect(result.docketNumber).toBe("1:23-cv-00001");
+    expect(result.documentDescription).toMatch(/Motion to Compel/i);
+  });
+});
+EOF
+
+cat > backend/src/modules/recap-import/__tests__/crawlerManifest.test.js <<'EOF'
+import { describe, it, expect } from "vitest";
+import { buildCrawlerManifest } from "../crawler-demo/crawlerManifest.js";
+
+describe("crawlerManifest", () => {
+  it("marks crawler run as demo-only and not for bulk retrieval", () => {
+    const manifest = buildCrawlerManifest({
+      query: "motion to compel",
+      maxPages: 5
+    });
+
+    expect(manifest.crawlMode).toBe("demo_browser_public_pages");
+    expect(manifest.notForBulkRetrieval).toBe(true);
+    expect(manifest.downloadPdfs).toBe(false);
+    expect(manifest.loginUsed).toBe(false);
+    expect(manifest.stealthUsed).toBe(false);
+    expect(manifest.proxyRotationUsed).toBe(false);
+    expect(manifest.concurrency).toBe(1);
+    expect(manifest.hardMaxPages).toBe(10);
+  });
+
+  it("records stoppedReason when crawler is blocked", () => {
+    const manifest = buildCrawlerManifest({
+      query: "motion to compel",
+      maxPages: 5,
+      stoppedReason: "HTTP_429",
+      pagesVisited: 0
+    });
+
+    expect(manifest.stoppedReason).toBe("HTTP_429");
+    expect(manifest.pagesVisited).toBe(0);
+  });
+});
+EOF
+
+cat > backend/src/modules/recap-import/__tests__/demoCrawlerCli.test.js <<'EOF'
+import { describe, it, expect } from "vitest";
+import { parseCrawlerCliArgs } from "../../../../../scripts/demo-crawl-courtlistener.js";
+
+describe("demo crawler CLI", () => {
+  it("requires either query or url", () => {
+    expect(() => parseCrawlerCliArgs([])).toThrow(/query or url/i);
+  });
+
+  it("parses query and maxPages", () => {
+    const args = parseCrawlerCliArgs([
+      "--query=motion to compel",
+      "--maxPages=5"
+    ]);
+
+    expect(args.query).toBe("motion to compel");
+    expect(args.maxPages).toBe(5);
+  });
+
+  it("rejects maxPages above hard limit at CLI boundary", () => {
+    expect(() =>
+      parseCrawlerCliArgs([
+        "--query=motion to compel",
+        "--maxPages=100"
+      ])
+    ).toThrow(/hard limit/i);
+  });
+
+  it("parses direct public URL mode", () => {
+    const args = parseCrawlerCliArgs([
+      "--url=https://www.courtlistener.com/recap/",
+      "--maxPages=3"
+    ]);
+
+    expect(args.url).toBe("https://www.courtlistener.com/recap/");
+    expect(args.maxPages).toBe(3);
+  });
+});
+EOF
+
+echo "Update-4 red tests written."
+echo "Run: npm test -- --run"
+```
