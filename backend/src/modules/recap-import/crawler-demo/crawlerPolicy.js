@@ -13,10 +13,14 @@ const DEFAULT_POLICY = {
 const BLOCKED_PATTERNS = [
   { pattern: /captcha/i, reason: 'CAPTCHA' },
   { pattern: /access denied/i, reason: 'ACCESS_DENIED' },
-  { pattern: /sign in/i, reason: 'LOGIN_WALL' },
-  { pattern: /please log in/i, reason: 'LOGIN_WALL' },
-  { pattern: /terms of service/i, reason: 'TERMS_WARNING' },
   { pattern: /too many requests/i, reason: 'RATE_LIMITED' },
+  { pattern: /Terms of Service/i, reason: 'TERMS_WARNING' },
+];
+
+const LOGIN_TITLE_PATTERNS = [
+  /^sign in/i,
+  /^log in/i,
+  /^login/i,
 ];
 
 export function validateCrawlerOptions(options = {}) {
@@ -60,12 +64,20 @@ export function shouldStopForResponse(response) {
   return { stop: false, reason: null };
 }
 
-export function detectBlockedPageText(text) {
+export function detectBlockedPageText(text, title) {
   if (!text) return { blocked: false, reason: null };
 
   for (const bp of BLOCKED_PATTERNS) {
     if (bp.pattern.test(text)) {
       return { blocked: true, reason: bp.reason };
+    }
+  }
+
+  if (title) {
+    for (const tp of LOGIN_TITLE_PATTERNS) {
+      if (tp.test(title)) {
+        return { blocked: true, reason: 'LOGIN_WALL' };
+      }
     }
   }
 

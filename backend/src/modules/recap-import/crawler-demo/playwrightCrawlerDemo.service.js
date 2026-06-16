@@ -56,13 +56,6 @@ export async function runCourtListenerCrawlerDemo({
       visited.add(currentUrl);
 
       const html = await page.content();
-
-      const blocked = detectBlockedPageText(html);
-      if (blocked.blocked) {
-        stoppedReason = blocked.reason;
-        break;
-      }
-
       const title = await page.title();
       const pageNum = String(visited.size).padStart(3, '0');
       const htmlCachePath = `${runDir}/pages/page-${pageNum}.html`;
@@ -70,6 +63,13 @@ export async function runCourtListenerCrawlerDemo({
       if (fileStore) {
         await fileStore.ensureDir(`${runDir}/pages`);
         await fileStore.writeFile(htmlCachePath, html);
+      }
+
+      const blocked = detectBlockedPageText(html, title);
+      if (blocked.blocked) {
+        console.warn(`[crawler-demo] Blocked: ${blocked.reason} (title: "${title}")`);
+        stoppedReason = blocked.reason;
+        break;
       }
 
       const parsed = parseCrawlerPageResult({

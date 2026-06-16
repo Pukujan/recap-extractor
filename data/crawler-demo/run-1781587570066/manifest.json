@@ -12,8 +12,8 @@
   "loginUsed": false,
   "stealthUsed": false,
   "proxyRotationUsed": false,
-  "stoppedReason": "HTTP_403",
-  "pagesVisited": 0,
-  "startedAt": "2026-06-16T05:21:22.241Z",
-  "finishedAt": "2026-06-16T05:21:22.241Z"
+  "stoppedReason": null,
+  "pagesVisited": 20,
+  "startedAt": "2026-06-16T05:31:34.074Z",
+  "finishedAt": "2026-06-16T05:31:34.074Z"
 }
