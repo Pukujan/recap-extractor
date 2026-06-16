@@ -19,9 +19,18 @@ npm test
 npm start
 ```
 
-## Run Full Pipeline Test
+## Commands
 
-One command starts the server, creates a job, processes all matching RECAP documents, and prints extraction sources:
+| Command | What it does |
+|---|---|
+| `npm test` | Run all 150 tests |
+| `npm start` | Start the API server |
+| `npm run recap-pipeline` | RECAP API pipeline — search, download PDFs, extract legal JSON |
+| `npm run crawler` | Playwright browser crawl — navigate public CourtListener pages, cache HTML, no API |
+
+### RECAP Pipeline
+
+Searches the CourtListener **API** for RECAP documents, downloads PDFs/plain text, and extracts structured legal JSON via DeepSeek.
 
 ```bash
 npm run recap-pipeline                    # "motion to compel", 10 docs
@@ -38,6 +47,23 @@ Output shows each document's **extraction source**:
 | `metadata_only` | No body text available — metadata/description only |
 
 If all documents show `metadata_only`, the pipeline found RECAP documents but none had downloadable body text (PACER-only docs).
+
+### Crawler Demo
+
+Launches a browser to navigate public CourtListener **web pages**, caches HTML locally, and extracts page metadata. No API calls, no PDF downloads. Bounded to 20 pages max, polite 10-20s delay between pages.
+
+Requires Playwright with Chromium installed:
+
+```bash
+npx playwright install chromium
+```
+
+```bash
+npm run crawler                           # "motion to compel", 20 pages
+npm run crawler -- --query="discovery"    # custom query
+```
+
+Output lands in `data/crawler-demo/run-{timestamp}/`:
 
 ## How It Works
 
