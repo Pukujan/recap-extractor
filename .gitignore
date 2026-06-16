@@ -1,8 +1,5 @@
-.env
-.env.local
-.env.*.local
 node_modules/
+.env
 data/recap-imports/
-data/tmp/
-data/logs/
-data/evals/
+data/crawler-demo/
+*.log
