@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# run-pipeline — Start server, create a RECAP search job, process documents, show results
+# Usage: ./bin/run-pipeline [searchTerms] [targetCount]
+#
+# Examples:
+#   ./bin/run-pipeline                    # "motion to compel", 10 docs
+#   ./bin/run-pipeline "discovery" 3      # "discovery", 3 docs
+
+set -euo pipefail
+
+SEARCH="${1:-motion to compel}"
+COUNT="${2:-10}"
+
+echo "=== Starting RECAP Extractor server ==="
+npm start > /tmp/recap-server.log 2>&1 &
+SERVER_PID=$!
+sleep 4
+
+cleanup() {
+  kill "$SERVER_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+echo "=== Creating job: search=\"$SEARCH\", targetCount=$COUNT ==="
+JOB_ID=$(curl -s -X POST http://localhost:3000/api/recap-import/jobs \
+  -H "Content-Type: application/json" \
+  -d "{\"searchTerms\":\"$SEARCH\",\"targetCount\":$COUNT}" | jq -r ".jobId // empty")
+
+if [ -z "$JOB_ID" ]; then
+  echo "FAILED TO CREATE JOB"
+  cat /tmp/recap-server.log
+  exit 1
+fi
+echo "JOB_ID=$JOB_ID"
+
+echo "=== Processing $COUNT documents ==="
+for i in $(seq 1 "$COUNT"); do
+  echo "--- Processing doc $i/$COUNT ---"
+  curl -s -X POST "http://localhost:3000/api/recap-import/jobs/$JOB_ID/process" | jq
+done
+
+echo "=== JOB STATUS ==="
+curl -s "http://localhost:3000/api/recap-import/jobs/$JOB_ID" | jq
+
+echo "=== EXTRACTION SOURCES ==="
+find ./data/recap-imports -name extraction_source.json -print -exec jq '.' {} \;
+
+echo "=== MANIFEST EXTRACTION SUMMARY ==="
+find ./data/recap-imports -name document_manifest.json -print -exec jq '.extraction' {} \;
+
+echo "=== EXTRACTED LEGAL JSON FILES ==="
+find ./data/recap-imports -name extracted_legal.json -print | sort
+
+echo "=== DONE ==="

@@ -93,6 +93,18 @@ export function createRecapImportTestSystem(options = {}) {
     })),
   };
 
+  const documentBodyProcessingService = {
+    run: vi.fn(async () => ({
+      extractionSource: 'courtlistener_plain_text',
+      text: 'body text for extraction',
+      bodyTextAvailable: true,
+      bodyTextLength: 100,
+      metadataOnly: false,
+      pageImageCount: 0,
+    })),
+    fileStore,
+  };
+
   const manifestAgent = {
     run: vi.fn(async (ctx) => ({
       status: "complete",
@@ -126,6 +138,7 @@ export function createRecapImportTestSystem(options = {}) {
     legalAnnotationAgent,
     legalExtractionAgent,
     manifestAgent,
+    documentBodyProcessingService,
   });
 
   const config = {

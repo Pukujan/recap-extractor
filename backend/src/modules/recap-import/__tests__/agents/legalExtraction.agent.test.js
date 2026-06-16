@@ -38,6 +38,24 @@ const validExtraction = {
 };
 
 describe("LegalExtractionAgent", () => {
+const mockBodySource = {
+  extractionSource: 'courtlistener_plain_text',
+  text: 'Plaintiff moves to compel.',
+  bodyTextAvailable: true,
+  bodyTextLength: 30,
+  metadataOnly: false,
+  pageImageCount: 0,
+};
+
+const mockBodySourceMeta = {
+  extractionSource: 'metadata_only',
+  text: 'Motion to compel',
+  bodyTextAvailable: false,
+  bodyTextLength: 16,
+  metadataOnly: true,
+  pageImageCount: 0,
+};
+
   it("requires OPENROUTER_API_KEY", async () => {
     const agent = new LegalExtractionAgent({
       openRouterTextClient: { extractLegalJson: vi.fn() },
@@ -50,10 +68,9 @@ describe("LegalExtractionAgent", () => {
 
     await expect(
       agent.run({
-        parsed: { text: "Plaintiff moves to compel." },
+        bodySource: mockBodySource,
         annotations: { annotations: [] },
         metadata: {},
-        review: { reviewRequired: false, flags: [] },
         folders: mockFolders(),
       })
     ).rejects.toThrow(/OPENROUTER_API_KEY/i);
@@ -71,10 +88,9 @@ describe("LegalExtractionAgent", () => {
 
     await expect(
       agent.run({
-        parsed: { text: "Plaintiff moves to compel." },
+        bodySource: mockBodySource,
         annotations: { annotations: [] },
         metadata: {},
-        review: { reviewRequired: false, flags: [] },
         folders: mockFolders(),
       })
     ).rejects.toThrow(/LEGAL_EXTRACTION_MODEL/i);
@@ -95,20 +111,15 @@ describe("LegalExtractionAgent", () => {
     });
 
     const result = await agent.run({
-      parsed: {
+      bodySource: {
+        ...mockBodySource,
         text: "Plaintiff Jane Smith moves to compel discovery responses by July 1, 2026.",
       },
-      annotations: {
-        annotations: [],
-      },
+      annotations: { annotations: [] },
       metadata: {
         caseName: "Smith v. Hospital Corp",
         courtId: "nysd",
         docketNumber: "1:26-cv-12345",
-      },
-      review: {
-        reviewRequired: false,
-        flags: [],
       },
       folders: mockFolders(),
     });
@@ -139,10 +150,9 @@ describe("LegalExtractionAgent", () => {
 
     await expect(
       agent.run({
-        parsed: { text: "Plaintiff moves to compel." },
+        bodySource: mockBodySource,
         annotations: { annotations: [] },
         metadata: {},
-        review: { reviewRequired: false, flags: [] },
         folders: mockFolders(),
       })
     ).rejects.toThrow(/strict JSON/i);
@@ -164,10 +174,9 @@ describe("LegalExtractionAgent", () => {
 
     await expect(
       agent.run({
-        parsed: { text: "Plaintiff moves to compel." },
+        bodySource: mockBodySource,
         annotations: { annotations: [] },
         metadata: {},
-        review: { reviewRequired: false, flags: [] },
         folders: mockFolders(),
       })
     ).rejects.toThrow(/429/i);
@@ -189,10 +198,9 @@ describe("LegalExtractionAgent", () => {
     });
 
     const result = await agent.run({
-      parsed: { text: "Plaintiff moves to compel." },
+      bodySource: mockBodySource,
       annotations: { annotations: [] },
       metadata: {},
-      review: { reviewRequired: false, flags: [] },
       folders: mockFolders(),
     });
 

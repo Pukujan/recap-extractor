@@ -8,7 +8,7 @@ export class ManifestAgent {
   }
 
   async run(input) {
-    const { task, metadata, folders, fetched, parsed, extraction, review } = input;
+    const { task, metadata, folders, fetched, parsed, extraction, review, bodySource } = input;
 
     const manifest = {
       jobId: task.jobId,
@@ -21,6 +21,15 @@ export class ManifestAgent {
         docketEntryId: metadata.docketEntryId || null,
         documentNumber: metadata.documentNumber || null,
       },
+      extraction: bodySource ? {
+        extractionSource: bodySource.extractionSource,
+        bodyTextAvailable: bodySource.bodyTextAvailable,
+        bodyTextLength: bodySource.bodyTextLength,
+        pageImageCount: bodySource.pageImageCount || 0,
+        metadataOnly: bodySource.metadataOnly,
+        confidenceCapApplied: extraction?.confidenceCapApplied ?? false,
+        confidenceOverall: extraction?.confidence?.overall ?? null,
+      } : null,
       folders: {
         caseFolderPath: folders.caseFolderPath,
         documentFolderPath: folders.documentFolderPath,

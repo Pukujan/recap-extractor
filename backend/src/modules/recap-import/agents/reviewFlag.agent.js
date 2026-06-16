@@ -7,9 +7,25 @@ const SIGNATURE_PATTERNS = [
   /[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\)?\s*$/m,
 ];
 
+export function buildReviewFlags({ extractionSource, bodyTextAvailable, extractedLegal } = {}) {
+  const flags = [];
+
+  if (extractionSource === 'metadata_only' && !bodyTextAvailable) {
+    flags.push({
+      flagType: 'metadata_only_extraction',
+      code: 'METADATA_ONLY_EXTRACTION',
+      severity: 'high',
+      message: 'No CourtListener plain_text, PDF embedded text, or OCR text was available. Extraction was based on metadata only.',
+      confidence: extractedLegal?.confidence?.overall ?? 0.45,
+    });
+  }
+
+  return flags;
+}
+
 export class ReviewFlagAgent {
   async run(input) {
-    const { parsed, metadata } = input;
+    const { parsed, metadata, bodySource } = input;
     const flags = [];
 
     const reviewFlags = parsed.reviewFlags || [];
@@ -17,19 +33,23 @@ export class ReviewFlagAgent {
       flags.push({ ...rf });
     }
 
+    const bodyFlags = buildReviewFlags({
+      extractionSource: bodySource?.extractionSource,
+      bodyTextAvailable: bodySource?.bodyTextAvailable,
+    });
+    flags.push(...bodyFlags);
+
     const pages = parsed.pages || [];
     for (const page of pages) {
-      const text = page.text || "";
+      const text = page.text || '';
       for (const pattern of SIGNATURE_PATTERNS) {
         if (pattern.test(text)) {
           flags.push({
-            flagType: "signature_possible",
-            severity: "medium",
+            flagType: 'signature_possible',
+            severity: 'medium',
             page: page.page,
-            reason: "Signature pattern detected in text.",
+            reason: 'Signature pattern detected in text.',
             confidence: 0.7,
-            bboxAvailable: false,
-            bbox: null,
           });
           break;
         }
@@ -37,13 +57,11 @@ export class ReviewFlagAgent {
 
       if (!text || text.trim().length === 0) {
         flags.push({
-          flagType: "missing_page_text",
-          severity: "high",
+          flagType: 'missing_page_text',
+          severity: 'high',
           page: page.page,
-          reason: "Page has no extracted text.",
+          reason: 'Page has no extracted text.',
           confidence: 1.0,
-          bboxAvailable: false,
-          bbox: null,
         });
       }
     }
@@ -52,13 +70,11 @@ export class ReviewFlagAgent {
     for (const ls of layoutSummary) {
       if (ls.hasHandwriting) {
         flags.push({
-          flagType: "handwriting_possible",
-          severity: "medium",
+          flagType: 'handwriting_possible',
+          severity: 'medium',
           page: ls.page,
-          reason: "Handwriting detected in layout summary.",
+          reason: 'Handwriting detected in layout summary.',
           confidence: 0.8,
-          bboxAvailable: false,
-          bbox: null,
         });
       }
     }

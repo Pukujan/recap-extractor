@@ -19,73 +19,50 @@ npm test
 npm start
 ```
 
+## Run Full Pipeline Test
+
+One command starts the server, creates a job, processes all matching RECAP documents, and prints extraction sources:
+
+```bash
+./bin/run-pipeline                    # "motion to compel", 10 docs
+./bin/run-pipeline "discovery" 3      # custom search, 3 docs
+```
+
+Output shows each document's **extraction source**:
+
+| Source | Meaning |
+|---|---|
+| `courtlistener_plain_text` | CourtListener provided full document text |
+| `pdf_embedded_text` | Text extracted from downloaded PDF |
+| `qwen_vl_ocr` | OCR via Qwen-VL from page images |
+| `metadata_only` | No body text available — metadata/description only |
+
+If all documents show `metadata_only`, the pipeline found RECAP documents but none had downloadable body text (PACER-only docs).
+
 ## How It Works
 
 ```
-Search Terms → CourtListener RECAP API → Queue → 
-Fetch PDF/Text → OCR Triage → Qwen-VL (if needed) →
-Legal Annotation → DeepSeek V4 Extraction → Manifest → 
-Local Folder
+Search Terms → CourtListener RECAP type=rd → available doc gate →
+Fetch PDF/plain_text → choose best body source → embedded PDF text extraction →
+PDF-to-image rendering → Qwen-VL OCR → legal annotation →
+DeepSeek legal extraction → confidence cap if metadata-only → review flags → manifest
 ```
 
-The pipeline takes search terms, finds matching RECAP documents, processes them one at a time, and saves everything into organized local folders with extracted legal JSON.
+The pipeline takes search terms, finds matching RECAP **documents** (not just cases), only enqueues those with available PDFs or text, selects the best body source, extracts structured legal JSON, and caps confidence when only metadata is available.
 
-## API — Full Search & Extract Walkthrough
-
-You search RECAP by creating a **job**, then **processing** documents one at a time. All output lands in local folders.
-
-### 1. Start the server
+## API
 
 ```bash
-npm start
-# Server starts on http://localhost:3000
-```
-
-### 2. Search RECAP and create a job
-
-```bash
+# Create an import job
 curl -X POST http://localhost:3000/api/recap-import/jobs \
   -H "Content-Type: application/json" \
-  -d '{"searchTerms": "medical malpractice motion to compel", "targetCount": 10}'
-```
+  -d '{"searchTerms": "motion to compel", "targetCount": 10}'
 
-Response:
-
-```json
-{
-  "jobId": "job_1",
-  "targetCount": 10,
-  "queueConcurrency": 1
-}
-```
-
-### 3. Process documents one at a time
-
-```bash
-# Process the first matching document
-curl -X POST http://localhost:3000/api/recap-import/jobs/job_1/process
-```
-
-Repeat this command to work through the queue. Each call fetches, annotates, and extracts one document.
-
-### 4. Check job status
-
-```bash
+# Check status
 curl http://localhost:3000/api/recap-import/jobs/job_1
-```
 
-Shows processed/failed/review-needed counts and the output folder path.
-
-### 5. View the output
-
-```
-./data/recap-imports/{case-name}__{court}__docket-{id}/
-  documents/doc-001-{description}/
-    source/source_metadata.json
-    extracted/extracted_legal.json    # structured legal data
-    extracted/legal_annotations.json
-    review/review_flags.json
-    manifest/document_manifest.json
+# Process next document
+curl -X POST http://localhost:3000/api/recap-import/jobs/job_1/process
 ```
 
 ## Architecture
@@ -96,11 +73,12 @@ See [projectplan/doc.md](projectplan/doc.md) for the full architecture contract.
 
 | Agent | Job |
 |---|---|
-| `recapSearch` | Searches CourtListener RECAP API |
+| `recapSearch` | Searches CourtListener RECAP API (`type=rd`) |
 | `queue` | Manages job queue (one doc at a time) |
 | `metadata` | Normalizes source metadata |
 | `caseFolder` | Creates safe local folder paths |
 | `fetch` | Downloads PDFs and plain text |
+| `documentBodyProcessing` | Selects best body source |
 | `textTriage` | Decides if OCR/vision is needed |
 | `documentVisionParser` | Qwen-VL page parsing via OpenRouter |
 | `reviewFlag` | Flags issues needing human review |
@@ -123,6 +101,7 @@ data/recap-imports/
           parsed.md
           parsed_pages.json
           layout_summary.json
+          extraction_source.json   # body source used for extraction
         review/
           review_flags.json
         extracted/
@@ -139,7 +118,7 @@ npm test            # run all tests
 npm run test:watch  # watch mode
 ```
 
-104 tests across 22 test files covering all agents, clients, services, routes, and integration.
+127 tests across 30 test files covering all agents, clients, services, routes, and integration.
 
 ## Requirements
 

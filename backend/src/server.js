@@ -7,6 +7,7 @@ import { RecapFileStore } from './modules/recap-import/services/recapFileStore.s
 import { JsonWriterService } from './modules/recap-import/services/jsonWriter.service.js';
 import { EvalWriter } from './modules/recap-import/services/evalWriter.service.js';
 import { PdfToImageService } from './modules/recap-import/services/pdfToImage.service.js';
+import { DocumentBodyProcessingService } from './modules/recap-import/services/documentBodyProcessing.service.js';
 import { sha256File } from './modules/recap-import/services/hash.service.js';
 
 import { CourtListenerClient } from './modules/recap-import/clients/courtListener.client.js';
@@ -113,6 +114,10 @@ async function main() {
     },
   });
 
+  const documentBodyProcessingService = new DocumentBodyProcessingService({
+    fileStore,
+  });
+
   const manifestAgent = new ManifestAgent({
     writer: jsonWriter,
   });
@@ -129,6 +134,7 @@ async function main() {
     legalAnnotationAgent,
     legalExtractionAgent,
     manifestAgent,
+    documentBodyProcessingService,
   });
 
   const controller = new RecapImportController({

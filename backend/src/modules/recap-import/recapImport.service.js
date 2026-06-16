@@ -11,6 +11,7 @@ export class RecapImportService {
     this.legalAnnotationAgent = agents.legalAnnotationAgent;
     this.legalExtractionAgent = agents.legalExtractionAgent;
     this.manifestAgent = agents.manifestAgent;
+    this.documentBodyProcessingService = agents.documentBodyProcessingService;
   }
 
   async createJob(input) {
@@ -34,6 +35,8 @@ export class RecapImportService {
 
     let metadata = null;
     let folders = null;
+    let fetchResult = null;
+    let bodySource = null;
 
     try {
       metadata = await this.metadataAgent.run(task);
@@ -43,7 +46,15 @@ export class RecapImportService {
         throw new Error(`caseFolderAgent returned invalid folders: ${JSON.stringify(folders)}`);
       }
 
-      const fetchResult = await this.fetchAgent.run({ task, metadata, folders });
+      fetchResult = await this.fetchAgent.run({ task, metadata, folders });
+
+      bodySource = await this.documentBodyProcessingService.run({
+        courtListenerPlainText: metadata.plainText || '',
+        pdfPath: fetchResult.pdfPath,
+        metadataText: metadata.description || '',
+        folders,
+        fileStore: this.documentBodyProcessingService.fileStore,
+      });
 
       const triageResult = await this.textTriageAgent.run({
         ...fetchResult,
@@ -53,11 +64,11 @@ export class RecapImportService {
 
       const visionResult = await this.documentVisionParserAgent.run({ triage: triageResult, fetched: fetchResult, folders });
 
-      const flags = await this.reviewFlagAgent.run({ parsed: visionResult, metadata });
+      const flags = await this.reviewFlagAgent.run({ parsed: visionResult, metadata, bodySource });
 
       const annotations = await this.legalAnnotationAgent.run({ parsed: visionResult, metadata, review: flags, folders });
 
-      const extraction = await this.legalExtractionAgent.run({ parsed: visionResult, annotations, metadata, review: flags, folders });
+      const extraction = await this.legalExtractionAgent.run({ bodySource, metadata, annotations, folders });
 
       await this.manifestAgent.run({
         task,
@@ -68,6 +79,7 @@ export class RecapImportService {
         extraction,
         review: flags,
         annotations,
+        bodySource,
       });
 
       const reviewRequired = flags.reviewRequired;

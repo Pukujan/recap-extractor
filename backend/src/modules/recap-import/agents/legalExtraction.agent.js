@@ -114,7 +114,47 @@ Extract structured legal information from the following legal document text and 
   }
 }
 
+Use DOCUMENT BODY as the primary evidence.
+Use metadata only for case identity, docket identity, court, date, and description.
+If extractionSource is metadata_only, do not infer facts not present in metadata.
 If information is not present in the text, use empty arrays or null values. Do not invent information.`;
+
+export function buildLegalExtractionInput({ sourceMetadata, bodySource, annotations }) {
+  const parts = [];
+
+  if (bodySource.bodyTextAvailable && bodySource.text) {
+    parts.push(`=== DOCUMENT BODY (source: ${bodySource.extractionSource}) ===\n${bodySource.text}`);
+  }
+
+  parts.push(`=== METADATA ===\n${JSON.stringify(sourceMetadata, null, 2)}`);
+
+  if (annotations && annotations.length > 0) {
+    parts.push(`=== ANNOTATIONS ===\n${JSON.stringify(annotations, null, 2)}`);
+  }
+
+  if (!bodySource.bodyTextAvailable) {
+    parts.push('NOTE: No document body text was available. Extraction is based on metadata only. Do not infer facts not present in the metadata.');
+  }
+
+  return parts.join('\n\n');
+}
+
+export function applyExtractionConfidencePolicy({ extraction, extractionSource }) {
+  const result = { ...extraction, confidence: { ...extraction.confidence } };
+
+  if (extractionSource === 'metadata_only') {
+    result.confidence.overall = Math.min(result.confidence.overall ?? 1, 0.45);
+    result.confidence.documentType = Math.min(result.confidence.documentType ?? 1, 0.45);
+    result.confidence.entities = Math.min(result.confidence.entities ?? 1, 0.35);
+    result.confidence.dates = Math.min(result.confidence.dates ?? 1, 0.5);
+    result.confidence.legalIssues = Math.min(result.confidence.legalIssues ?? 1, 0.3);
+    result.confidenceCapApplied = true;
+  } else {
+    result.confidenceCapApplied = false;
+  }
+
+  return result;
+}
 
 export class LegalExtractionAgent {
   constructor({ openRouterTextClient, writer, config }) {
@@ -124,37 +164,40 @@ export class LegalExtractionAgent {
   }
 
   async run(input) {
-    const { parsed, annotations, metadata, review, folders } = input;
+    const { bodySource, metadata, annotations, folders } = input;
     const { openRouterApiKey, legalExtractionModel } = this.config;
 
     if (!openRouterApiKey) {
-      throw new Error("OPENROUTER_API_KEY is required for LegalExtractionAgent");
+      throw new Error('OPENROUTER_API_KEY is required for LegalExtractionAgent');
     }
     if (!legalExtractionModel) {
-      throw new Error("LEGAL_EXTRACTION_MODEL is required for LegalExtractionAgent");
+      throw new Error('LEGAL_EXTRACTION_MODEL is required for LegalExtractionAgent');
     }
 
-    const combinedInput = JSON.stringify({
-      text: parsed.text || "",
-      pages: parsed.pages || [],
-      annotations: annotations.annotations || [],
-      metadata,
-      review,
-    }, null, 2);
+    const extractionInput = buildLegalExtractionInput({
+      sourceMetadata: metadata,
+      bodySource,
+      annotations: annotations?.annotations || [],
+    });
 
     const result = await this.openRouterTextClient.extractLegalJson({
       model: legalExtractionModel,
       prompt: LEGAL_EXTRACTION_PROMPT,
-      input: combinedInput,
+      input: JSON.stringify({ text: extractionInput }),
     });
 
-    if (typeof result === "string") {
-      throw new Error("Legal extraction returned prose/markdown instead of strict JSON");
+    if (typeof result === 'string') {
+      throw new Error('Legal extraction returned prose/markdown instead of strict JSON');
     }
 
-    const extractedPath = `${folders.documentFolderPath}extracted/extracted_legal.json`;
-    await this.writer.writeJson(extractedPath, result);
+    const policyApplied = applyExtractionConfidencePolicy({
+      extraction: result,
+      extractionSource: bodySource.extractionSource,
+    });
 
-    return result;
+    const extractedPath = `${folders.documentFolderPath}extracted/extracted_legal.json`;
+    await this.writer.writeJson(extractedPath, policyApplied);
+
+    return policyApplied;
   }
 }

@@ -2,7 +2,7 @@ import express from "express";
 import { RecapImportService } from "../../recapImport.service.js";
 import { RecapImportController } from "../../recapImport.controller.js";
 import { createRecapImportRouter } from "../../recapImport.routes.js";
-import { createInMemoryQueueRepository, mockFolders, setTestAppRepo } from "../testHelpers.js";
+import { createInMemoryQueueRepository, createMockFileStore, mockFolders, setTestAppRepo } from "../testHelpers.js";
 
 function createMockAgents(repo) {
   const queueAgent = {
@@ -94,6 +94,18 @@ function createMockAgents(repo) {
     runError: async () => {},
   };
 
+  const documentBodyProcessingService = {
+    run: async () => ({
+      extractionSource: 'courtlistener_plain_text',
+      text: 'body text for extraction',
+      bodyTextAvailable: true,
+      bodyTextLength: 100,
+      metadataOnly: false,
+      pageImageCount: 0,
+    }),
+    fileStore: createMockFileStore(),
+  };
+
   return {
     queueAgent,
     recapSearchAgent,
@@ -106,6 +118,7 @@ function createMockAgents(repo) {
     legalAnnotationAgent,
     legalExtractionAgent,
     manifestAgent,
+    documentBodyProcessingService,
   };
 }
 

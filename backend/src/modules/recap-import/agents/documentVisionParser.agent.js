@@ -1,3 +1,8 @@
+export function resolveOcrProvider(provider) {
+  if (provider === 'qwen_vl') return 'qwen_vl';
+  throw new Error(`Unsupported OCR provider: ${provider}. Only qwen_vl is allowed.`);
+}
+
 const QWEN_VL_PROMPT = `You are a precise OCR and legal document analysis system. Return ONLY a valid JSON object with no markdown wrapping, no code fences, and no additional text.
 
 Analyze the provided page image and return this exact JSON structure:

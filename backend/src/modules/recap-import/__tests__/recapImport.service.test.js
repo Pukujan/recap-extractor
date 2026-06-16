@@ -78,6 +78,17 @@ describe("RecapImportService", () => {
       runError: vi.fn(),
     };
 
+    const documentBodyProcessingService = {
+      run: vi.fn().mockResolvedValue({
+        extractionSource: 'courtlistener_plain_text',
+        text: 'body text',
+        bodyTextAvailable: true,
+        bodyTextLength: 100,
+        metadataOnly: false,
+        pageImageCount: 0,
+      }),
+    };
+
     const service = new RecapImportService({
       queueAgent,
       metadataAgent,
@@ -89,6 +100,7 @@ describe("RecapImportService", () => {
       legalAnnotationAgent,
       legalExtractionAgent,
       manifestAgent,
+      documentBodyProcessingService,
     });
 
     const result = await service.processNextDocument("job_1");
