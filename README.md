@@ -30,24 +30,63 @@ Local Folder
 
 The pipeline takes search terms, finds matching RECAP documents, processes them one at a time, and saves everything into organized local folders with extracted legal JSON.
 
-## API
+## API — Full Search & Extract Walkthrough
 
-Start the server, then:
+You search RECAP by creating a **job**, then **processing** documents one at a time. All output lands in local folders.
+
+### 1. Start the server
 
 ```bash
-# Create an import job
+npm start
+# Server starts on http://localhost:3000
+```
+
+### 2. Search RECAP and create a job
+
+```bash
 curl -X POST http://localhost:3000/api/recap-import/jobs \
   -H "Content-Type: application/json" \
   -d '{"searchTerms": "medical malpractice motion to compel", "targetCount": 10}'
-
-# Check status
-curl http://localhost:3000/api/recap-import/jobs/{jobId}
-
-# Process next document
-curl -X POST http://localhost:3000/api/recap-import/jobs/{jobId}/process
 ```
 
-Output is saved to `./data/recap-imports/{case-name}__{court}__docket-{id}/`.
+Response:
+
+```json
+{
+  "jobId": "job_1",
+  "targetCount": 10,
+  "queueConcurrency": 1
+}
+```
+
+### 3. Process documents one at a time
+
+```bash
+# Process the first matching document
+curl -X POST http://localhost:3000/api/recap-import/jobs/job_1/process
+```
+
+Repeat this command to work through the queue. Each call fetches, annotates, and extracts one document.
+
+### 4. Check job status
+
+```bash
+curl http://localhost:3000/api/recap-import/jobs/job_1
+```
+
+Shows processed/failed/review-needed counts and the output folder path.
+
+### 5. View the output
+
+```
+./data/recap-imports/{case-name}__{court}__docket-{id}/
+  documents/doc-001-{description}/
+    source/source_metadata.json
+    extracted/extracted_legal.json    # structured legal data
+    extracted/legal_annotations.json
+    review/review_flags.json
+    manifest/document_manifest.json
+```
 
 ## Architecture
 
